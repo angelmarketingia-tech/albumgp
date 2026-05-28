@@ -159,11 +159,26 @@ rutas (o regenerar `/public/brand/` desde `/brand/`).
 
 ---
 
-## Pendientes de marca
+## Configuración MVP (decisión del dueño)
 
-- `[CONFIRMAR_DORADO_OFICIAL]` — el dorado `#D4A017` es propuesta nuestra
-  (el Manual no estandariza un HEX dorado sólido).
-- `[CONFIRMAR_TIPOGRAFIA_OFICIAL]` — DM Sans + Fraunces son near-matches
-  gratuitas. Cuando llegue licencia de Stage Grotesk + Qartella, swap.
-- `[CONFIRMAR_TEXTO_LEGAL]` — copy provisional de las 3 cartas garantizadas
-  por país, sujeta a revisión legal del dueño.
+**Para el MVP avanzamos con lo más parecido disponible.** Cuando el MVP
+esté listo y en producción, se hacen los swaps a los oficiales en
+commits puntuales sin cambiar lógica.
+
+| Elemento | MVP (en uso) | Oficial (post-MVP) | Swap |
+| --- | --- | --- | --- |
+| Sans | **DM Sans** (Google) | Stage Grotesk (comercial) | `app/layout.tsx` |
+| Display | **Fraunces** (Google) | Qartella (comercial) | `app/layout.tsx` |
+| Dorado acento | **`#D4A017`** (propuesta nuestra) | TBD del Manual | `tailwind.config.ts > gp.gold` |
+| Rareza epic | **`#5A3E9F`** (propuesta de Diseño) | TBD del Manual | `components/cards/RarityBadge.tsx > EPIC_COLOR` |
+| Copy garantizadas | **provisional** ("$10 USD para apostar…") | Revisión legal | `prisma/seed.ts` |
+
+Las decisiones de marca **NO BLOQUEAN** features del MVP. Quedan
+listadas para tracking post-lanzamiento.
+
+### Pendientes para post-MVP (no bloqueantes)
+
+- `[CONFIRMAR_DORADO_OFICIAL]` — validar / reemplazar `#D4A017`.
+- `[CONFIRMAR_TIPOGRAFIA_OFICIAL]` — licencia Stage Grotesk + Qartella.
+- `[CONFIRMAR_EPIC_COLOR]` — validar / reemplazar `#5A3E9F`.
+- `[CONFIRMAR_TEXTO_LEGAL]` — revisión legal de los 6 labels.
