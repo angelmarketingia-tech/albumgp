@@ -88,7 +88,12 @@ describe("EnvelopeFlow", () => {
     vi.useRealTimers();
   });
 
-  it("starts in the `opening` phase: renders EnvelopeOpening, NOT PackReveal nor ctaSlot", () => {
+  it("after hydration, settles into the `opening` phase: renders EnvelopeOpening, NOT PackReveal nor ctaSlot", () => {
+    // EnvelopeFlow is SSR-safe: the very first render is `done` so users see
+    // the pack even if hydration fails. Once the client hydrates, the
+    // useEffect rewinds to `opening` to play the animation. RTL flushes
+    // effects synchronously, so by the time render() returns we should see
+    // the post-hydration state.
     const { container } = render(
       <EnvelopeFlow pack={pack} country="SV" ctaSlot={<CtaSlot />} />,
     );

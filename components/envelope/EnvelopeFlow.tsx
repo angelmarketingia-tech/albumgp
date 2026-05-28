@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import type { JSX, ReactNode } from "react";
 
 import { EnvelopeOpening } from "./EnvelopeOpening";
@@ -11,6 +11,12 @@ import type { PackResult } from "@/lib/prizes/types";
 /**
  * Wrapper client que secuencia: apertura del sobre -> reveal de cartas ->
  * mostrado de CTAs (canjear / depositos).
+ *
+ * Progressive enhancement: el server SIEMPRE renderiza el estado final
+ * (pack + CTAs visibles). Solo cuando el cliente hidrata, "rebobina" al
+ * estado opening para ejecutar la animacion. Si la hidratacion nunca
+ * ocurre (extension del navegador, JS deshabilitado, fallo del bundle),
+ * el usuario ve la misma pagina que veria al final de la animacion.
  *
  * Server-only siblings (botones link) se pasan via `ctaSlot` para que la
  * pagina pueda mantenerlos como server components — este wrapper solo
@@ -34,8 +40,15 @@ export function EnvelopeFlow({
   ctaSlot,
   skipAnimation = false,
 }: EnvelopeFlowProps): JSX.Element {
-  const initialPhase: Phase = skipAnimation ? "done" : "opening";
-  const [phase, setPhase] = useState<Phase>(initialPhase);
+  // SSR: arrancamos en "done" para que el usuario vea todo aunque la
+  // hidratacion falle. Si hidrata, useEffect baja a "opening" para
+  // disparar la animacion. skipAnimation tambien se queda en "done".
+  const [phase, setPhase] = useState<Phase>("done");
+
+  useEffect(() => {
+    if (skipAnimation) return;
+    setPhase("opening");
+  }, [skipAnimation]);
 
   const handleOpened = useCallback(() => {
     setPhase("revealing");
