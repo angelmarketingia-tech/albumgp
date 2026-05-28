@@ -37,3 +37,8 @@ coverage/
 # prisma
 prisma/dev.db
 prisma/dev.db-journal
+
+# brand: Manual de Marca (131 MB excede el limite duro de 100 MB de GitHub).
+# Pendiente: el dueno debe entregar version <100 MB o PNG de paginas clave.
+# Ver brand/README.md seccion "Pendiente del dueno".
+brand/MANUAL_DE_MARCA.pdf
