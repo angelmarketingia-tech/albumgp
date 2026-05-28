@@ -17,7 +17,7 @@
 //   - On 200 → push to `/sobre/<code>`. The reveal page re-opens with the
 //     same code (opening is idempotent via `pack_result`).
 
-import { useState, useTransition, type FormEvent } from "react";
+import { useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import { normalizeCode } from "@/lib/prizes/input-schemas";
 import { CodeInput } from "@/components/ui/CodeInput";
@@ -29,7 +29,6 @@ export function EntryForm(): JSX.Element {
   const router = useRouter();
   const [code, setCode] = useState("");
   const [status, setStatus] = useState<Status>("idle");
-  const [isPending, startTransition] = useTransition();
 
   async function onSubmit(e: FormEvent<HTMLFormElement>): Promise<void> {
     e.preventDefault();
@@ -55,15 +54,15 @@ export function EntryForm(): JSX.Element {
         return;
       }
       // Idempotent re-open on the next page reads the same pack_result.
-      startTransition(() => {
-        router.push(`/sobre/${encodeURIComponent(normalized)}`);
-      });
+      // router.push is enough — wrapping it in startTransition was racing
+      // with the setStatus re-render and dropping the navigation.
+      router.push(`/sobre/${encodeURIComponent(normalized)}`);
     } catch {
       setStatus("error");
     }
   }
 
-  const busy = status === "submitting" || isPending;
+  const busy = status === "submitting";
   const error =
     status === "error" ? "Código inválido o no disponible" : undefined;
 
