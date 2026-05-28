@@ -130,32 +130,36 @@ export function EnvelopeOpening({
         ease: "easeOut",
       }}
     >
-      {/* ---------- Sobre cerrado: aparece + shake ---------- */}
+      {/* ---------- Sobre cerrado: aparece + shake pronunciado ---------- */}
       <motion.div
         data-envelope-body
         className="relative h-80 w-60 sm:h-96 sm:w-72"
-        initial={{ opacity: 0, scale: 0.85 }}
+        initial={{ opacity: 0, scale: 0.8 }}
         animate={{
           opacity: [0, 1, 1, 1],
-          scale: [0.85, 1, 1.02, 1],
-          rotate: [0, -1.5, 1.5, -1.2, 1.2, 0],
+          // Escala más pronunciada — "anticipa" la apertura.
+          scale: [0.8, 1, 1.06, 1],
+          // Shake amplio y más rápido entre extremos.
+          rotate: [0, -3.5, 4.0, -3.0, 3.0, -1.5, 0],
+          // Pequeño desplazamiento vertical para reforzar el "tiembla".
+          y: [0, -4, 3, -3, 2, 0],
         }}
         transition={{
           duration: (STEP_APPEAR_MS + STEP_SHAKE_MS) / 1000,
-          times: [0, 0.33, 0.66, 1],
+          times: [0, 0.18, 0.36, 0.54, 0.72, 0.88, 1],
           ease: "easeOut",
         }}
       >
-        {/* Sombra dorada pulsante */}
+        {/* Sombra dorada pulsante — más intensa */}
         <motion.div
           aria-hidden
-          className="pointer-events-none absolute -inset-4 rounded-2xl"
+          className="pointer-events-none absolute -inset-5 rounded-2xl"
           style={{
             boxShadow:
-              "0 0 60px 12px rgba(212, 160, 23, 0.45), 0 0 120px 24px rgba(212, 160, 23, 0.2)",
+              "0 0 80px 16px rgba(212, 160, 23, 0.6), 0 0 160px 32px rgba(212, 160, 23, 0.3)",
           }}
           initial={{ opacity: 0 }}
-          animate={{ opacity: [0, 0.4, 0.9, 0.4, 0.9, 0] }}
+          animate={{ opacity: [0, 0.5, 1, 0.6, 1, 0] }}
           transition={{
             duration: (STEP_APPEAR_MS + STEP_SHAKE_MS + STEP_FLAP_MS) / 1000,
             times: [0, 0.18, 0.4, 0.6, 0.8, 1],

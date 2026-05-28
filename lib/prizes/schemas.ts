@@ -48,12 +48,27 @@ export const externalCodePrizeSchema = z.object({
 // safely through JSON, URLs and DOM ids without escaping or collision risk.
 export const COLLECTIBLE_ID_REGEX = /^[a-z0-9-]+$/;
 
+// `image_url` accepts:
+//   - Absolute URL (http(s)://...) — for CDN-hosted artwork.
+//   - Root-relative path (/assets/cartas/...) — for files served by
+//     Next.js out of /public/. This is the canonical form for the MVP.
+// We deliberately do NOT accept bare relative paths (`assets/x.png`),
+// protocol-relative URLs (`//foo`), `data:` URIs, or anything that would
+// confuse `next/image`.
+const imageUrlSchema = z
+  .string()
+  .min(1)
+  .refine(
+    (s) => s.startsWith("/") || /^https?:\/\//.test(s),
+    "image_url must be an absolute URL or a root-relative path",
+  );
+
 export const collectiblePrizeSchema = z.object({
   type: z.literal("collectible"),
   collectible_id: z.string().min(1).regex(COLLECTIBLE_ID_REGEX),
   label: z.string().min(1),
   rarity: z.enum(["common", "rare", "epic", "legendary"]),
-  image_url: z.string().url().optional(),
+  image_url: imageUrlSchema.optional(),
 });
 
 export const nonePrizeSchema = z.object({

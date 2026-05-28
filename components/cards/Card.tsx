@@ -9,6 +9,28 @@ import { BRAND_NAME } from "@/lib/brand/constants";
 
 import { PrizeIcon } from "./PrizeIcon";
 import { RarityBadge } from "./RarityBadge";
+import { Confetti } from "./Confetti";
+
+/** Premio "real" = canjeable o de valor monetario / mercancía. */
+function isRealPrize(prize: Prize): boolean {
+  return (
+    prize.type === "sports_credit" ||
+    prize.type === "casino_spins" ||
+    prize.type === "deposit_match" ||
+    prize.type === "physical" ||
+    prize.type === "external_code"
+  );
+}
+
+/** Rarezas que merecen halo pulsante. */
+function isFancyRarity(prize: Prize): prize is CollectiblePrize {
+  return (
+    prize.type === "collectible" &&
+    (prize.rarity === "rare" ||
+      prize.rarity === "epic" ||
+      prize.rarity === "legendary")
+  );
+}
 
 /**
  * Carta primitiva del sobre. Renderiza el premio según su `type` del
@@ -233,6 +255,8 @@ export function Card({
   const sizeCls = SIZE_CLS[size];
   const isNone = prize.type === "none";
   const isPremiumCollectible = isLegendaryOrEpic(prize);
+  const fancy = isFancyRarity(prize);
+  const showConfetti = revealed && isRealPrize(prize) && size !== "sm";
 
   const borderCls = isPremiumCollectible
     ? "border-2 border-transparent bg-gp-gold-gradient"
@@ -245,6 +269,19 @@ export function Card({
   const allowHover = size !== "sm";
   const hoverProps = allowHover ? { whileHover: { scale: 1.02 } } : {};
 
+  // Confetti se dispara justo cuando la cara delantera queda visible
+  // (mitad de la animación de flip). 500ms flip -> dispara a +250ms del delay.
+  const confettiDelay = delay + 250;
+
+  // Halo pulsante para colecciionables rare/epic/legendary. Color
+  // depende de la rareza para reforzar visualmente la jerarquia.
+  const glowColor = (() => {
+    if (!fancy) return null;
+    if (prize.rarity === "legendary") return "rgba(212, 160, 23, 0.65)";
+    if (prize.rarity === "epic") return "rgba(168, 85, 247, 0.55)";
+    return "rgba(0, 120, 62, 0.5)"; // rare → verde de marca
+  })();
+
   return (
     <motion.div
       data-card
@@ -254,6 +291,26 @@ export function Card({
       {...hoverProps}
       transition={{ type: "spring", stiffness: 300, damping: 24 }}
     >
+      {/* Halo pulsante para coleccionables raros */}
+      {glowColor !== null && revealed ? (
+        <motion.div
+          aria-hidden
+          className="pointer-events-none absolute -inset-2 rounded-2xl"
+          style={{
+            boxShadow: `0 0 40px 8px ${glowColor}, 0 0 80px 16px ${glowColor}`,
+          }}
+          initial={{ opacity: 0 }}
+          animate={{ opacity: [0, 0.85, 0.55, 0.85] }}
+          transition={{
+            delay: (delay + 400) / 1000,
+            duration: 2.4,
+            repeat: Infinity,
+            repeatType: "mirror",
+            ease: "easeInOut",
+          }}
+        />
+      ) : null}
+
       <motion.div
         className="relative h-full w-full [transform-style:preserve-3d]"
         initial={revealed ? { rotateY: 180 } : { rotateY: 0 }}
@@ -283,6 +340,9 @@ export function Card({
           </span>
         </div>
       </motion.div>
+
+      {/* Confetti dorado al revelar premios reales (sobre la animacion de flip) */}
+      {showConfetti ? <Confetti delay={confettiDelay} /> : null}
     </motion.div>
   );
 }

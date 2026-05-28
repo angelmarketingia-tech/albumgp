@@ -68,9 +68,10 @@ const gtGuaranteed: Prize[] = [
 ];
 
 // Demo pool of decorative collectibles — same set for SV and GT for now.
-// `image_url` is intentionally OMITTED until Diseño provides assets under
-// `/public/assets/cartas/` (Fase 4-6). The `none` entry exists so some
-// slots come up empty, which makes rarer collectibles feel rarer.
+// `image_url` points to PNG assets under `/public/assets/cartas/`
+// (generated with Higgsfield Z Image, see brand/README.md). Reemplazar
+// con arte oficial cuando llegue. The `none` entry exists so some slots
+// come up empty, which makes rarer collectibles feel rarer.
 const demoCollectiblesPool: VariablePoolEntry[] = [
   {
     prize: {
@@ -78,6 +79,7 @@ const demoCollectiblesPool: VariablePoolEntry[] = [
       collectible_id: "delantero-estrella",
       label: "Delantero estrella",
       rarity: "common",
+      image_url: "/assets/cartas/delantero-estrella.png",
     },
     weight: 5,
   },
@@ -87,6 +89,7 @@ const demoCollectiblesPool: VariablePoolEntry[] = [
       collectible_id: "mediocampo-creativo",
       label: "Mediocampo creativo",
       rarity: "common",
+      image_url: "/assets/cartas/mediocampo-creativo.png",
     },
     weight: 5,
   },
@@ -96,6 +99,7 @@ const demoCollectiblesPool: VariablePoolEntry[] = [
       collectible_id: "defensor-de-hierro",
       label: "Defensor de hierro",
       rarity: "common",
+      image_url: "/assets/cartas/defensor-de-hierro.png",
     },
     weight: 4,
   },
@@ -105,6 +109,7 @@ const demoCollectiblesPool: VariablePoolEntry[] = [
       collectible_id: "arquero-impasable",
       label: "Arquero impasable",
       rarity: "rare",
+      image_url: "/assets/cartas/arquero-impasable.png",
     },
     weight: 3,
   },
@@ -114,6 +119,7 @@ const demoCollectiblesPool: VariablePoolEntry[] = [
       collectible_id: "capitan",
       label: "Capitán",
       rarity: "rare",
+      image_url: "/assets/cartas/capitan.png",
     },
     weight: 2,
   },
@@ -123,6 +129,7 @@ const demoCollectiblesPool: VariablePoolEntry[] = [
       collectible_id: "joven-promesa",
       label: "Joven promesa",
       rarity: "epic",
+      image_url: "/assets/cartas/joven-promesa.png",
     },
     weight: 1,
   },
