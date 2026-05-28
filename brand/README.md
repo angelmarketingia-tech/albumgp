@@ -15,7 +15,7 @@ por el dueño.
 
 ```
 brand/
-  MANUAL_DE_MARCA.pdf           # autoridad final de marca (ver "Pendiente del dueno")
+  MANUAL_DE_MARCA.pdf           # autoridad final de marca (version comprimida 2.9 MB, versionado en git)
   plantilla-fondo-historias.png # plantilla de fondo (recurso secundario, formato stories)
   logo/
     logo-blanco.png             # logo blanco con transparencia (uso principal sobre fondo verde)
@@ -31,7 +31,7 @@ brand/
 | `logo/logo-principal.jpg` | JPG | 1080 x 1080 | 85 KB | Logo completo con tagline "Pronosticos deportivos". Referencia tipografica y de marca; no usar en UI por ser JPG sobre verde quemado. |
 | `logo/logo-solo-isotipo.jpg` | JPG | 1080 x 1921 | 73 KB | Variante del lockup "GanaPlay" sobre verde. Referencia de proporciones. |
 | `plantilla-fondo-historias.png` | PNG | 1080 x 1920 | 3.2 MB | Plantilla oficial para piezas formato stories. Recurso secundario, no se usa directamente en la web app. |
-| `MANUAL_DE_MARCA.pdf` | PDF | -- | 131 MB | Autoridad final de marca. **No esta versionado en git** (ver abajo). |
+| `MANUAL_DE_MARCA.pdf` | PDF | -- | 2.9 MB | Autoridad final de marca. Version comprimida del Manual original (131 MB). Versionada en git. |
 
 ---
 
@@ -66,23 +66,14 @@ los oficiales contra el Manual. Ver bloqueante abajo.
 
 ---
 
-## Pendiente del dueno
+## Pendientes de marca
 
-> El Manual de Marca pesa **131 MB**, por encima del limite duro de 100 MB
-> de GitHub. Por eso `brand/MANUAL_DE_MARCA.pdf` esta listado en
-> `.gitignore` y **no se versiona**. Vive solo en disco local hasta que el
-> dueno entregue una version mas liviana.
-
-Para desbloquear esta fase necesitamos que el dueno provea **una** de las
-dos opciones siguientes:
-
-1. Una version del PDF **< 100 MB** (PDF optimizado / sin imagenes a alta
-   resolucion innecesaria), o
-2. **PNG de las paginas clave** del Manual: paleta de color, tipografia,
-   area de proteccion del logo, tamano minimo, y ejemplos de uso.
-
-Hasta entonces, los siguientes puntos quedan marcados como
-**`[CONFIRMAR_*]`** en el codigo y no se deben dar por definitivos:
+El Manual de Marca ya esta versionado en `brand/MANUAL_DE_MARCA.pdf`
+(version comprimida de 2.9 MB, derivada del PDF original de 131 MB).
+Sin embargo, los siguientes puntos siguen marcados como
+**`[CONFIRMAR_*]`** en el codigo: el lider tiene que leer el PDF
+comprimido (o recibir screenshots de las paginas clave) para cerrarlos.
+**No bloquean Fase 4**: avanzamos con placeholders y refinamos despues.
 
 - **`[CONFIRMAR_HEX_OFICIALES]`** — los HEX en `tailwind.config.ts`
   (`#008745`, `#01783E`, `#00602F`, `#FFFFFF`, `#FFD600`) son aproximaciones
@@ -99,8 +90,9 @@ Hasta entonces, los siguientes puntos quedan marcados como
   variantes sobre fondo claro vs oscuro, prohibiciones explicitas (no
   estirar, no recolorear, etc.).
 
-El agente lider debe solicitar lo anterior al dueno antes de cerrar la
-Fase 1 de UI.
+El agente lider revisa el PDF comprimido (o pide screenshots al dueno)
+para cerrar estos puntos antes de pulir Fase 4 de UI, pero el desarrollo
+puede arrancar con los placeholders actuales.
 
 ---
 
