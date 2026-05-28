@@ -11,14 +11,17 @@
 //   - Llamamos al endpoint SSR para que el HTML inicial ya traiga el reveal
 //     (un solo round-trip al cliente). Si el endpoint responde !ok mostramos
 //     un mensaje genérico — nunca distinguimos "expirado" vs "consumido".
-//   - El render del pack es deliberadamente minimal: 5 `<div>`s. Cuando el
-//     agente de diseño termine los componentes ricos (PackReveal, Card),
-//     este archivo importa esos componentes y deja de hacer el grid plano.
+//   - Render rico: `EnvelopeBackground` + `PackReveal` + `ActionButton` de
+//     Diseño Ola 1. La lógica de outcome / fetch no cambió respecto del
+//     placeholder anterior.
 
 import Link from "next/link";
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { Logo } from "@/components/brand/Logo";
+import { EnvelopeBackground } from "@/components/envelope/EnvelopeBackground";
+import { PackReveal } from "@/components/envelope/PackReveal";
+import { ActionButton } from "@/components/ui/ActionButton";
 import {
   DEPOSIT_URLS,
   LEGAL_NOTICES,
@@ -27,13 +30,8 @@ import {
   normalizeCode,
   packResultSchema,
   type PackResult,
-  type Prize,
 } from "@/lib/prizes";
-import {
-  formatCodeDisplay,
-  prizeShortDescription,
-  rarityLabel,
-} from "@/lib/ui/format";
+import { formatCodeDisplay } from "@/lib/ui/format";
 
 export const dynamic = "force-dynamic";
 
@@ -109,82 +107,6 @@ async function openCode(code: string): Promise<OpenOutcome> {
   return { kind: "ok", pack: parsed.data, country };
 }
 
-// ---------- Render helpers (minimal placeholders) ----------------------------
-
-function PrizeMeta({ prize }: { prize: Prize }): JSX.Element {
-  switch (prize.type) {
-    case "sports_credit":
-      return (
-        <p className="text-lg font-semibold text-gp-gold">
-          {prize.amount} {prize.currency}
-        </p>
-      );
-    case "casino_spins":
-      return (
-        <>
-          <p className="text-lg font-semibold text-gp-gold">
-            {prize.count} giros
-          </p>
-          <p className="text-xs text-white/70">{prize.game_name}</p>
-        </>
-      );
-    case "deposit_match":
-      return (
-        <p className="text-lg font-semibold text-gp-gold">
-          x{prize.multiplier}
-        </p>
-      );
-    case "physical":
-      return <p className="text-sm text-white">{prize.label}</p>;
-    case "external_code":
-      return <p className="text-sm text-white">{prize.provider}</p>;
-    case "collectible":
-      return (
-        <p className="text-xs uppercase tracking-wider text-white/80">
-          {rarityLabel(prize.rarity)}
-        </p>
-      );
-    case "none":
-      return <p className="text-sm text-white/60">Sin premio</p>;
-    default: {
-      const _exhaustive: never = prize;
-      void _exhaustive;
-      return <></>;
-    }
-  }
-}
-
-function PrizeCard({
-  prize,
-  guaranteed,
-}: {
-  prize: Prize;
-  guaranteed: boolean;
-}): JSX.Element {
-  const isNone = prize.type === "none";
-  return (
-    <div
-      aria-label={prizeShortDescription(prize)}
-      className={[
-        "flex aspect-[2/3] flex-col justify-between rounded-lg border p-3 text-center",
-        isNone
-          ? "border-white/20 bg-white/5 text-white/50"
-          : "border-white/30 bg-white/10 text-white",
-      ].join(" ")}
-    >
-      <div className="text-[10px] font-semibold uppercase tracking-wider text-white/70">
-        {guaranteed ? "Garantizado" : "Sorpresa"}
-      </div>
-      <div className="flex flex-1 flex-col items-center justify-center gap-1">
-        <PrizeMeta prize={prize} />
-      </div>
-      <div className="text-[11px] leading-tight text-white/80">
-        {prize.label || prizeShortDescription(prize)}
-      </div>
-    </div>
-  );
-}
-
 // ---------- Page -------------------------------------------------------------
 
 export default async function SobrePage({
@@ -212,7 +134,7 @@ export default async function SobrePage({
         ? "Esperá unos minutos y volvé a intentarlo."
         : "Probá con otro código o volvé a la pantalla principal.";
     return (
-      <main className="mx-auto flex min-h-screen max-w-md flex-col items-center justify-center gap-6 px-5 text-center">
+      <main className="mx-auto flex min-h-screen max-w-md flex-col items-center justify-center gap-6 px-5 text-center bg-gp-radial">
         <Logo variant="blanco" width={140} />
         <div>
           <h1 className="font-display text-2xl font-bold text-white">
@@ -220,12 +142,15 @@ export default async function SobrePage({
           </h1>
           <p className="mt-2 text-sm text-white/80">{detail}</p>
         </div>
-        <Link
-          href="/"
-          className="rounded bg-gp-gold px-4 py-3 font-semibold text-gp-gray-dark-2"
-        >
-          Volver a inicio
+        <Link href="/" className="inline-block">
+          <ActionButton variant="primary" size="md">
+            Volver a inicio
+          </ActionButton>
         </Link>
+        <footer className="mt-4 text-center text-xs text-white/70">
+          <p>{LEGAL_NOTICES.ageGate}</p>
+          <p className="mt-1">{LEGAL_NOTICES.responsibleGaming}</p>
+        </footer>
       </main>
     );
   }
@@ -234,58 +159,38 @@ export default async function SobrePage({
   const depositUrl = DEPOSIT_URLS[country];
 
   return (
-    <main className="mx-auto flex min-h-screen max-w-md flex-col gap-6 px-5 pb-8 pt-8">
-      <header className="flex flex-col items-center gap-3 text-center">
-        <Logo variant="blanco" width={140} />
-        <h1 className="font-display text-2xl font-bold text-white">
+    <EnvelopeBackground country={country}>
+      <section className="mb-6 flex flex-col items-center text-center">
+        <h1 className="font-display text-2xl font-bold text-gp-white sm:text-3xl">
           Tu sobre
         </h1>
-        <p className="font-mono text-xs tracking-wider text-white/70">
+        <p className="mt-1 font-mono text-xs tracking-wider text-gp-gray-light sm:text-sm">
           {formatCodeDisplay(normalized)}
         </p>
-      </header>
-
-      <section
-        aria-label="Cartas reveladas"
-        className="grid grid-cols-3 gap-3"
-      >
-        {pack.guaranteed.map((prize, i) => (
-          <PrizeCard
-            key={`g-${String(i)}`}
-            prize={prize}
-            guaranteed
-          />
-        ))}
-        {pack.variable.map((prize, i) => (
-          <PrizeCard
-            key={`v-${String(i)}`}
-            prize={prize}
-            guaranteed={false}
-          />
-        ))}
       </section>
 
-      <section className="flex flex-col gap-3">
+      <PackReveal pack={pack} />
+
+      <section className="mt-10 flex flex-col items-center gap-3">
         <Link
           href={`/canjear?code=${encodeURIComponent(normalized)}`}
-          className="block rounded bg-gp-gold px-4 py-3 text-center font-semibold text-gp-gray-dark-2"
+          className="block w-full max-w-sm"
         >
-          Canjear premios
+          <ActionButton variant="primary" size="lg" className="w-full">
+            Canjear premios
+          </ActionButton>
         </Link>
         <a
           href={depositUrl}
           target="_blank"
           rel="noopener noreferrer"
-          className="block rounded border border-white/40 px-4 py-3 text-center text-sm text-white/90"
+          className="block w-full max-w-sm"
         >
-          Depósitos
+          <ActionButton variant="secondary" size="md" className="w-full">
+            Depósitos
+          </ActionButton>
         </a>
       </section>
-
-      <footer className="mt-auto pt-6 text-center text-xs text-white/70">
-        <p>{LEGAL_NOTICES.ageGate}</p>
-        <p className="mt-1">{LEGAL_NOTICES.responsibleGaming}</p>
-      </footer>
-    </main>
+    </EnvelopeBackground>
   );
 }
