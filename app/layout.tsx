@@ -1,16 +1,27 @@
 import type { Metadata } from "next";
-import { Poppins } from "next/font/google";
+import { DM_Sans, Fraunces } from "next/font/google";
 import "./globals.css";
 
-// PLACEHOLDER: Poppins hasta confirmar [CONFIRMAR_TIPOGRAFIA_OFICIAL] del
-// Manual de Marca (brand/MANUAL_DE_MARCA.pdf). Es el match mas cercano al
-// tagline "Pronosticos deportivos" del logo principal: sans serif
-// redondeada, geometrica, peso fuerte.
-const poppins = Poppins({
+// [CONFIRMAR_TIPOGRAFIA_OFICIAL] — el Manual de Marca especifica:
+//   - Stage Grotesk (sans, principal) — comercial, requiere licencia.
+//   - Qartella (decorativa) — comercial, requiere licencia.
+// Hasta que el dueño provea archivos .woff2 con licencia, usamos near-matches
+// gratuitas de Google Fonts:
+//   - DM Sans  ≈ Stage Grotesk (sans geométrica, peso fuerte disponible).
+//   - Fraunces ≈ Qartella (display serif).
+// El swap a las fuentes oficiales reemplaza únicamente estas dos cargas.
+const dmSans = DM_Sans({
   subsets: ["latin"],
-  weight: ["400", "500", "600", "700", "800"],
+  weight: ["400", "500", "700"],
   display: "swap",
   variable: "--font-gp-sans",
+});
+
+const fraunces = Fraunces({
+  subsets: ["latin"],
+  weight: ["400", "700", "900"],
+  display: "swap",
+  variable: "--font-gp-display",
 });
 
 export const metadata: Metadata = {
@@ -24,11 +35,8 @@ export default function RootLayout({
   children: React.ReactNode;
 }): JSX.Element {
   return (
-    <html lang="es" className={poppins.variable}>
-      <body
-        className="min-h-screen bg-gp-radial"
-        style={{ fontFamily: "var(--font-gp-sans), system-ui, sans-serif" }}
-      >
+    <html lang="es" className={`${dmSans.variable} ${fraunces.variable}`}>
+      <body className="min-h-screen bg-gp-radial font-sans text-gp-white">
         {children}
       </body>
     </html>
