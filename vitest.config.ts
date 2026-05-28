@@ -23,7 +23,10 @@ export default defineConfig({
     // every other test (route handlers, libs, schemas) runs in plain Node.
     include: ["tests/**/*.test.ts", "tests/**/*.test.tsx"],
     environment: "node",
-    environmentMatchGlobs: [["tests/components/**", "jsdom"]],
+    environmentMatchGlobs: [
+      ["tests/components/**", "jsdom"],
+      ["tests/pages/**", "jsdom"],
+    ],
     // Only apply the DOM setup to component tests — node-env tests have
     // no DOM and don't need RTL cleanup or jest-dom matchers.
     setupFiles: ["tests/setup/maybe-dom.ts"],
