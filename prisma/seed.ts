@@ -1,7 +1,9 @@
-// Seed: one prize_set per country with the 3 guaranteed prizes as placeholders.
-// Labels are explicit PLACEHOLDERS pending [CONFIRMAR_TEXTO_LEGAL].
-// The variable_pool entries are intentionally `none` placeholders until
-// the variable pool composition is confirmed.
+// Seed: one prize_set per country with the 3 guaranteed prizes + a demo
+// pool of decorative collectible cards (NOT redeemable — they populate the
+// user's album for completion-style gamification).
+//
+// Labels use provisional marketing copy (no "PLACEHOLDER" wording exposed
+// to the user). The exact legal text is still pending [CONFIRMAR_TEXTO_LEGAL].
 
 import { PrismaClient } from "@prisma/client";
 import {
@@ -23,22 +25,22 @@ const svGuaranteed: Prize[] = [
     type: "sports_credit",
     amount: 10,
     currency: "USD",
-    // TODO: depende de [CONFIRMAR_TEXTO_LEGAL]
-    label: "[PLACEHOLDER] $10 USD para pronosticar — pendiente CONFIRMAR_TEXTO_LEGAL",
+    // TODO: copy provisional — sujeto a [CONFIRMAR_TEXTO_LEGAL] del Manual.
+    label: "$10 USD para apostar en eventos deportivos",
   },
   {
     type: "casino_spins",
     count: 200,
     game_name: "Clover Super Pot",
-    // TODO: depende de [CONFIRMAR_TEXTO_LEGAL]
-    label: "[PLACEHOLDER] 200 giros gratis en Clover Super Pot — pendiente CONFIRMAR_TEXTO_LEGAL",
+    // TODO: copy provisional — sujeto a [CONFIRMAR_TEXTO_LEGAL] del Manual.
+    label: "200 giros gratis en Clover Super Pot",
   },
   {
     type: "deposit_match",
     multiplier: 3,
     extras: "giros gratis",
-    // TODO: depende de [CONFIRMAR_TEXTO_LEGAL]
-    label: "[PLACEHOLDER] Triplicamos tu primer depósito + giros — pendiente CONFIRMAR_TEXTO_LEGAL",
+    // TODO: copy provisional — sujeto a [CONFIRMAR_TEXTO_LEGAL] del Manual.
+    label: "Triplicamos tu primer depósito + giros gratis",
   },
 ];
 
@@ -47,33 +49,86 @@ const gtGuaranteed: Prize[] = [
     type: "sports_credit",
     amount: 100,
     currency: "GTQ",
-    // TODO: depende de [CONFIRMAR_TEXTO_LEGAL]
-    label: "[PLACEHOLDER] Q100 para pronosticar — pendiente CONFIRMAR_TEXTO_LEGAL",
+    // TODO: copy provisional — sujeto a [CONFIRMAR_TEXTO_LEGAL] del Manual.
+    label: "Q100 para apostar en eventos deportivos",
   },
   {
     type: "casino_spins",
     count: 200,
     game_name: "Super Tiki Strike",
-    // TODO: depende de [CONFIRMAR_TEXTO_LEGAL]
-    label: "[PLACEHOLDER] 200 giros gratis en Super Tiki Strike — pendiente CONFIRMAR_TEXTO_LEGAL",
+    // TODO: copy provisional — sujeto a [CONFIRMAR_TEXTO_LEGAL] del Manual.
+    label: "200 giros gratis en Super Tiki Strike",
   },
   {
     type: "deposit_match",
     multiplier: 3,
-    // TODO: depende de [CONFIRMAR_TEXTO_LEGAL]
-    label: "[PLACEHOLDER] Triplicamos tu primer depósito — pendiente CONFIRMAR_TEXTO_LEGAL",
+    // TODO: copy provisional — sujeto a [CONFIRMAR_TEXTO_LEGAL] del Manual.
+    label: "Triplicamos tu primer depósito",
   },
 ];
 
-// TODO: pool variable real pendiente — composición y pesos por país.
-const placeholderVariablePool: VariablePoolEntry[] = [
+// Demo pool of decorative collectibles — same set for SV and GT for now.
+// `image_url` is intentionally OMITTED until Diseño provides assets under
+// `/public/assets/cartas/` (Fase 4-6). The `none` entry exists so some
+// slots come up empty, which makes rarer collectibles feel rarer.
+const demoCollectiblesPool: VariablePoolEntry[] = [
   {
-    prize: { type: "none", label: "[PLACEHOLDER] No ganaste" },
+    prize: {
+      type: "collectible",
+      collectible_id: "delantero-estrella",
+      label: "Delantero estrella",
+      rarity: "common",
+    },
+    weight: 5,
+  },
+  {
+    prize: {
+      type: "collectible",
+      collectible_id: "mediocampo-creativo",
+      label: "Mediocampo creativo",
+      rarity: "common",
+    },
+    weight: 5,
+  },
+  {
+    prize: {
+      type: "collectible",
+      collectible_id: "defensor-de-hierro",
+      label: "Defensor de hierro",
+      rarity: "common",
+    },
+    weight: 4,
+  },
+  {
+    prize: {
+      type: "collectible",
+      collectible_id: "arquero-impasable",
+      label: "Arquero impasable",
+      rarity: "rare",
+    },
+    weight: 3,
+  },
+  {
+    prize: {
+      type: "collectible",
+      collectible_id: "capitan",
+      label: "Capitán",
+      rarity: "rare",
+    },
+    weight: 2,
+  },
+  {
+    prize: {
+      type: "collectible",
+      collectible_id: "joven-promesa",
+      label: "Joven promesa",
+      rarity: "epic",
+    },
     weight: 1,
   },
   {
-    prize: { type: "none", label: "[PLACEHOLDER] No ganaste — variante" },
-    weight: 1,
+    prize: { type: "none", label: "No ganaste" },
+    weight: 4,
   },
 ];
 
@@ -92,8 +147,8 @@ function assertValid(
 }
 
 async function main(): Promise<void> {
-  assertValid(svGuaranteed, placeholderVariablePool);
-  assertValid(gtGuaranteed, placeholderVariablePool);
+  assertValid(svGuaranteed, demoCollectiblesPool);
+  assertValid(gtGuaranteed, demoCollectiblesPool);
 
   await prisma.prizeSet.upsert({
     where: { id: PRIZE_SET_SV_ID },
@@ -101,12 +156,12 @@ async function main(): Promise<void> {
       id: PRIZE_SET_SV_ID,
       country: "SV",
       guaranteed: svGuaranteed,
-      variablePool: placeholderVariablePool,
+      variablePool: demoCollectiblesPool,
       cardsPerPack: 5,
     },
     update: {
       guaranteed: svGuaranteed,
-      variablePool: placeholderVariablePool,
+      variablePool: demoCollectiblesPool,
       cardsPerPack: 5,
     },
   });
@@ -117,12 +172,12 @@ async function main(): Promise<void> {
       id: PRIZE_SET_GT_ID,
       country: "GT",
       guaranteed: gtGuaranteed,
-      variablePool: placeholderVariablePool,
+      variablePool: demoCollectiblesPool,
       cardsPerPack: 5,
     },
     update: {
       guaranteed: gtGuaranteed,
-      variablePool: placeholderVariablePool,
+      variablePool: demoCollectiblesPool,
       cardsPerPack: 5,
     },
   });
