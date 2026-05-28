@@ -98,14 +98,61 @@ Reglas operativas:
 - Nunca importar `lib/auth/identity.ts` desde un componente `'use client'`.
 - En prod sin OIDC configurado: `getIdentityProvider()` lanza al primer uso. Intencional.
 
-## 6. Webhook saliente (firma)
+## 6. Webhook saliente (firma + transporte)
 
-Cuando `/api/redeem` confirme un canje, dispara un webhook firmado a la plataforma central (Fase 3). Esquema definido hoy en `lib/security/webhook.ts`:
+Cuando `/api/redeem` confirma un canje, dispara un webhook firmado a la plataforma central. Implementado en `lib/webhook/sender.ts` + `lib/webhook/types.ts`. La firma vive en `lib/security/webhook.ts`.
+
+### 6.1 Firma
 
 - HMAC-SHA256(secret, `<timestamp>.<body>`)
-- Cabeceras: `X-AlbumGP-Timestamp` (epoch s) y `X-AlbumGP-Signature` (hex).
-- Receptor verifica firma + `|now - timestamp| < tolerancia` (default 5 min) para frenar replays.
-- Implementado sólo el helper de firma/verify; el transporte HTTP es Fase 3.
+- Cabeceras:
+  - `X-AlbumGP-Timestamp` — epoch en segundos (string decimal).
+  - `X-AlbumGP-Signature` — hex lowercase del HMAC.
+  - `idempotency-key` — UUID v4 (`delivery_id` del payload). La central debe deduplicar por esta clave para que nuestros retries no procesen dos veces el mismo canje.
+- Receptor verifica firma + `|now - timestamp| < 300s` (5 min) para frenar replays.
+
+### 6.2 Contrato del payload
+
+Tipo y schema Zod en `lib/webhook/types.ts` (`RedemptionWebhookPayload` + `redemptionWebhookPayloadSchema`). Forma exacta:
+
+```json
+{
+  "event": "redemption",
+  "code_id": "<uuid del Code en nuestra BD — NO el código en claro>",
+  "code_hash": "<sha256 hex del código en claro — para correlación>",
+  "country": "SV" | "GT",
+  "account_id": "<id opaco del IdentityProvider, ej. mock:abcdef0123456789>",
+  "prizes": {
+    "guaranteed": [ /* Prize[] tal cual se persistió */ ],
+    "variable":   [ /* Prize[] */ ],
+    "pack_version": "v1"
+  },
+  "redeemed_at": "2025-01-01T00:00:00.000Z",
+  "delivery_id": "<uuid v4 — idempotency key>"
+}
+```
+
+**Nunca** mandamos el código en claro. La central correlaciona por `code_id` (UUID) o `code_hash`.
+
+### 6.3 Reintentos y timeouts
+
+- Total 3 intentos por canje: 1 inicial + 2 retries.
+- Backoff entre intentos: **1s, 5s**. (Espera 1s antes del 2º intento, 5s antes del 3º.) Si el 3º falla → `webhook_status = 'failed'` en `redemptions`. **El canje NO se revierte**: el premio queda auditado y el webhook es re-driveable manualmente.
+- Timeout por intento: **10 segundos** vía `AbortController`. Cualquier intento que pase de 10s se aborta y cuenta como fallo del intento.
+
+### 6.4 Dry-run (sin URL configurada)
+
+Si `WEBHOOK_CENTRAL_URL` está vacío (típicamente en dev y CI), el sender entra en modo dry-run:
+
+- NO hace fetch.
+- Loggea un evento `webhook.dry_run` con `delivery_id`, `code_id` y un preview de 8 chars hex de la firma (correlación sin filtrar la firma completa).
+- Devuelve `{ status: 'sent', attempts: 0 }`. El `attempts: 0` distingue dry-run de un envío real exitoso en la auditoría (`redemptions.webhook_attempts`).
+
+### 6.5 Higiene de logs
+
+- El secret NUNCA se loggea ni aparece en `webhook_last_error`.
+- La firma completa nunca se loggea (sólo los primeros 8 chars en dry-run).
+- `webhook_last_error` se trunca a 500 chars antes de persistir.
 
 ## 7. Inputs
 
@@ -124,5 +171,6 @@ Cuando `/api/redeem` confirme un canje, dispara un webhook firmado a la platafor
 - **CSP estricta con nonces** — hoy `'unsafe-inline'` por requerimiento de Next 14. Migrar a nonces antes de prod final. Ref en `lib/security/headers.ts`.
 - **IP detrás de Vercel Edge** — usar `request.ip` (Edge runtime) o `geo` cuando movamos endpoints calientes a Edge, en vez de confiar en `x-forwarded-for`. Comentario TODO en `keyForIp`.
 - **SSO real (Fase 3)** — Ola 1 entregada como **stub mock detrás de `IdentityProvider`** (ver §6.5). Swap a OIDC pendiente: el reemplazo es agregar `OidcIdentityProvider` en `lib/auth/identity.ts` y enrutar `getIdentityProvider()` cuando `env.AUTH_PROVIDER === 'oidc'`. Cuando entre OIDC: validar PKCE/state, no almacenar tokens en localStorage, cookies `Secure+HttpOnly+SameSite=Lax` (ya configuradas).
-- **Auditoría de canjes** — tabla `redemptions` ya en schema. Falta sink inmutable (append-only) y retención mínima.
+- **Webhook saliente** — ✅ implementado en `lib/webhook/sender.ts` (firma + retries + dry-run). Queda pendiente: configurar `WEBHOOK_CENTRAL_URL` real cuando la central exponga su endpoint, y un job de reconciliación que retomé `redemptions` con `webhook_status='failed'`.
+- **Auditoría de canjes** — tabla `redemptions` ya en schema y populada por `/api/redeem`. Falta sink inmutable (append-only) y retención mínima.
 - **Verificación de edad / 18+** — responsabilidad del dueño / SSO. La UI muestra avisos (AGENTS.md sec. 12).
