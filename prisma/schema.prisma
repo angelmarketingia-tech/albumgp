@@ -1,0 +1,89 @@
+// AlbumGP — Prisma schema
+// See AGENTS.md §11 for the source-of-truth data model.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_DATABASE_URL")
+}
+
+enum Country {
+  SV
+  GT
+}
+
+enum CodeStatus {
+  active
+  redeemed
+  disabled
+  expired
+}
+
+enum WebhookStatus {
+  pending
+  sent
+  confirmed
+  failed
+}
+
+model Code {
+  id           String      @id @default(uuid()) @db.Uuid
+  code         String      @unique
+  country      Country
+  prizeSetId   String      @map("prize_set_id") @db.Uuid
+  status       CodeStatus  @default(active)
+  // Pack result is *fixed at first open* so re-opening shows the same cards
+  // (AGENTS.md §3 / §11). Validated against `packResultSchema` before write.
+  packResult   Json?       @map("pack_result")
+  openedAt     DateTime?   @map("opened_at")
+  redeemedAt   DateTime?   @map("redeemed_at")
+  redeemedBy   String?     @map("redeemed_by")
+  redeemedIp   String?     @map("redeemed_ip")
+  // TODO: depende de [CONFIRMAR_SI_VENCEN]
+  expiresAt    DateTime?   @map("expires_at")
+  createdAt    DateTime    @default(now()) @map("created_at")
+
+  prizeSet     PrizeSet    @relation(fields: [prizeSetId], references: [id])
+  redemption   Redemption?
+
+  @@index([status])
+  @@index([country])
+  @@map("codes")
+}
+
+model PrizeSet {
+  id            String   @id @default(uuid()) @db.Uuid
+  country       Country
+  // Array of `Prize` (see lib/prizes/types.ts).
+  guaranteed    Json
+  // Array of `{ prize: Prize, weight: number }`.
+  variablePool  Json     @map("variable_pool")
+  cardsPerPack  Int      @default(5) @map("cards_per_pack")
+  createdAt     DateTime @default(now()) @map("created_at")
+
+  codes         Code[]
+
+  @@map("prize_sets")
+}
+
+model Redemption {
+  id               String        @id @default(uuid()) @db.Uuid
+  codeId           String        @unique @map("code_id") @db.Uuid
+  accountId        String        @map("account_id")
+  // Snapshot of the pack_result delivered at redemption time.
+  result           Json
+  webhookStatus    WebhookStatus @default(pending) @map("webhook_status")
+  webhookAttempts  Int           @default(0) @map("webhook_attempts")
+  webhookLastError String?       @map("webhook_last_error")
+  createdAt        DateTime      @default(now()) @map("created_at")
+
+  code             Code          @relation(fields: [codeId], references: [id])
+
+  @@index([accountId])
+  @@index([webhookStatus])
+  @@map("redemptions")
+}
