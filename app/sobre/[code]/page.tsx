@@ -20,7 +20,7 @@ import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { Logo } from "@/components/brand/Logo";
 import { EnvelopeBackground } from "@/components/envelope/EnvelopeBackground";
-import { PackReveal } from "@/components/envelope/PackReveal";
+import { EnvelopeFlow } from "@/components/envelope/EnvelopeFlow";
 import { ActionButton } from "@/components/ui/ActionButton";
 import {
   DEPOSIT_URLS,
@@ -169,28 +169,32 @@ export default async function SobrePage({
         </p>
       </section>
 
-      <PackReveal pack={pack} />
-
-      <section className="mt-10 flex flex-col items-center gap-3">
-        <Link
-          href={`/canjear?code=${encodeURIComponent(normalized)}`}
-          className="block w-full max-w-sm"
-        >
-          <ActionButton variant="primary" size="lg" className="w-full">
-            Canjear premios
-          </ActionButton>
-        </Link>
-        <a
-          href={depositUrl}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="block w-full max-w-sm"
-        >
-          <ActionButton variant="secondary" size="md" className="w-full">
-            Depósitos
-          </ActionButton>
-        </a>
-      </section>
+      <EnvelopeFlow
+        pack={pack}
+        country={country}
+        ctaSlot={
+          <section className="mx-auto flex w-full max-w-sm flex-col items-center gap-3">
+            <Link
+              href={`/canjear?code=${encodeURIComponent(normalized)}`}
+              className="block w-full"
+            >
+              <ActionButton variant="primary" size="lg" className="w-full">
+                Canjear premios
+              </ActionButton>
+            </Link>
+            <a
+              href={depositUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="block w-full"
+            >
+              <ActionButton variant="secondary" size="md" className="w-full">
+                Depósitos
+              </ActionButton>
+            </a>
+          </section>
+        }
+      />
     </EnvelopeBackground>
   );
 }
