@@ -13,8 +13,12 @@ export default defineConfig({
     },
   },
   test: {
-    include: ["tests/**/*.test.ts"],
+    // Component tests live under tests/components/** and need a DOM, while
+    // every other test (route handlers, libs, schemas) runs in plain Node.
+    include: ["tests/**/*.test.ts", "tests/**/*.test.tsx"],
     environment: "node",
+    environmentMatchGlobs: [["tests/components/**", "jsdom"]],
+    setupFiles: ["tests/setup/dom.ts"],
     globals: false,
   },
 });
