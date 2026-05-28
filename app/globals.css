@@ -1,0 +1,23 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --gp-green-core: #008745;
+  --gp-green: #01783E;
+  --gp-green-deep: #00602F;
+  --gp-white: #FFFFFF;
+  --gp-gold: #FFD600;
+}
+
+html,
+body {
+  height: 100%;
+}
+
+body {
+  color: var(--gp-white);
+  font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI",
+    Roboto, "Helvetica Neue", Arial, sans-serif;
+  /* TODO: depende de [CONFIRMAR_TIPOGRAFIA_OFICIAL] (Manual de Marca). */
+}
