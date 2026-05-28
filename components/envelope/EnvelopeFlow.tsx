@@ -28,6 +28,21 @@ export interface EnvelopeFlowProps {
   pack: PackResult;
   country: "SV" | "GT";
   ctaSlot: ReactNode;
+  /**
+   * URL a la que apunta el "tocar para abrir". Cuando este link se
+   * sigue, el server vuelve a renderizar la pagina con `initialStage`
+   * en `'revealing'`, asi el reveal arranca SIN depender de JS para
+   * el click. Si no se provee, se usa un onClick local (requiere
+   * hidratacion).
+   */
+  openHref?: string;
+  /**
+   * Etapa inicial. Por defecto `'idle'` — el sobre cerrado espera
+   * tocar. Si la pagina padre detecta `?reveal=1` (u otra senal),
+   * puede pasar `'revealing'` para empezar el suspenso al instante
+   * sin esperar el click del cliente.
+   */
+  initialStage?: Stage;
   /** Salta el suspenso (util en tests). */
   skipAnimation?: boolean;
 }
@@ -58,10 +73,81 @@ function notificationFor(prize: Prize): { label: string; color: string } {
 const REVEAL_INTERVAL_MS = 1100;
 const NOTIFICATION_FLASH_MS = 700;
 
+/**
+ * Boton/Link que abre el sobre. Si la pagina padre paso `openHref`,
+ * usamos un <a> real con full navigation — funciona aunque la
+ * hidratacion de React no haya llegado. Si no, fallback a un
+ * <button> con onClick (requiere JS hidratado).
+ */
+function EnvelopeOpenTrigger({
+  openHref,
+  onClick,
+}: {
+  openHref?: string | undefined;
+  onClick: () => void;
+}): JSX.Element {
+  const className =
+    "relative mt-4 flex h-80 w-60 cursor-pointer items-center justify-center rounded-2xl border-2 border-gp-gold bg-gp-radial shadow-[0_0_70px_14px_rgba(212,160,23,0.6)] outline-none transition-transform focus-visible:ring-4 focus-visible:ring-gp-gold focus-visible:ring-offset-2 focus-visible:ring-offset-black sm:h-96 sm:w-72";
+  const style: React.CSSProperties = {
+    animation:
+      "envelope-pulse 2s ease-in-out infinite, envelope-float 4s ease-in-out infinite",
+  };
+  const children = (
+    <>
+      <div className="flex flex-col items-center gap-2 px-6 text-center">
+        <p className="font-display text-lg font-bold uppercase tracking-widest text-gp-white">
+          GanaPlay
+        </p>
+        <p className="text-[10px] uppercase tracking-widest text-gp-gold">
+          Álbum oficial
+        </p>
+        <p className="font-display text-5xl font-extrabold leading-none text-gp-white">
+          2026
+        </p>
+      </div>
+      <span
+        aria-hidden
+        className="pointer-events-none absolute -inset-4 rounded-2xl"
+        style={{
+          boxShadow:
+            "0 0 70px 14px rgba(212,160,23,0.5), 0 0 140px 28px rgba(212,160,23,0.25)",
+          animation: "envelope-glow 2s ease-in-out infinite",
+        }}
+      />
+    </>
+  );
+
+  if (openHref !== undefined) {
+    return (
+      <a
+        href={openHref}
+        aria-label="Abrir el sobre"
+        className={className}
+        style={style}
+      >
+        {children}
+      </a>
+    );
+  }
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-label="Abrir el sobre"
+      className={className}
+      style={style}
+    >
+      {children}
+    </button>
+  );
+}
+
 export function EnvelopeFlow({
   pack,
   country,
   ctaSlot,
+  openHref,
+  initialStage,
   skipAnimation = false,
 }: EnvelopeFlowProps): JSX.Element {
   const items = [
@@ -77,15 +163,20 @@ export function EnvelopeFlow({
     })),
   ];
 
-  const [stage, setStage] = useState<Stage>(
-    skipAnimation ? "done" : "idle",
-  );
+  const resolvedInitialStage: Stage = skipAnimation
+    ? "done"
+    : initialStage ?? "idle";
+  const [stage, setStage] = useState<Stage>(resolvedInitialStage);
   /** Index de la siguiente carta a revelar (0..items.length). */
-  const [revealedCount, setRevealedCount] = useState<number>(
-    skipAnimation ? items.length : 0,
-  );
+  const [revealedCount, setRevealedCount] = useState<number>(() => {
+    if (skipAnimation || resolvedInitialStage === "done") return items.length;
+    if (resolvedInitialStage === "revealing") return 1;
+    return 0;
+  });
   /** Flag para animar el banner de notificacion al cambiar de carta. */
-  const [flashKey, setFlashKey] = useState<number>(0);
+  const [flashKey, setFlashKey] = useState<number>(
+    resolvedInitialStage === "revealing" ? 1 : 0,
+  );
 
   // Auto-avance: cuando estamos en `revealing`, cada N ms revela la
   // proxima carta hasta llegar al total. Despues pasa a `done`.
@@ -132,37 +223,7 @@ export function EnvelopeFlow({
             ABRIR
           </h3>
 
-          <button
-            type="button"
-            onClick={handleOpen}
-            aria-label="Abrir el sobre"
-            className="relative mt-4 flex h-80 w-60 cursor-pointer items-center justify-center rounded-2xl border-2 border-gp-gold bg-gp-radial shadow-[0_0_70px_14px_rgba(212,160,23,0.6)] outline-none transition-transform focus-visible:ring-4 focus-visible:ring-gp-gold focus-visible:ring-offset-2 focus-visible:ring-offset-black sm:h-96 sm:w-72"
-            style={{
-              animation:
-                "envelope-pulse 2s ease-in-out infinite, envelope-float 4s ease-in-out infinite",
-            }}
-          >
-            <div className="flex flex-col items-center gap-2 px-6 text-center">
-              <p className="font-display text-lg font-bold uppercase tracking-widest text-gp-white">
-                GanaPlay
-              </p>
-              <p className="text-[10px] uppercase tracking-widest text-gp-gold">
-                Álbum oficial
-              </p>
-              <p className="font-display text-5xl font-extrabold leading-none text-gp-white">
-                2026
-              </p>
-            </div>
-            <span
-              aria-hidden
-              className="pointer-events-none absolute -inset-4 rounded-2xl"
-              style={{
-                boxShadow:
-                  "0 0 70px 14px rgba(212,160,23,0.5), 0 0 140px 28px rgba(212,160,23,0.25)",
-                animation: "envelope-glow 2s ease-in-out infinite",
-              }}
-            />
-          </button>
+          <EnvelopeOpenTrigger openHref={openHref} onClick={handleOpen} />
 
           <p className="mt-6 text-center text-xs uppercase tracking-widest text-gp-gray-light">
             Toca el sobre para revelar tus cartas

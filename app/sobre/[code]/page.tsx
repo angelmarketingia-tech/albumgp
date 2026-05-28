@@ -108,10 +108,16 @@ async function openCode(code: string): Promise<OpenOutcome> {
 
 // ---------- Page -------------------------------------------------------------
 
+interface SobreSearchParams {
+  reveal?: string | string[];
+}
+
 export default async function SobrePage({
   params,
+  searchParams,
 }: {
   params: { code: string };
+  searchParams: SobreSearchParams;
 }): Promise<JSX.Element> {
   // The URL param may be lowercased or hand-edited. Normalize before we
   // hit the server. If the format is broken, send the user back to /
@@ -120,6 +126,13 @@ export default async function SobrePage({
   if (normalized === null) {
     redirect("/");
   }
+
+  // `?reveal=1` is set when the user clicks the "TOCA PARA ABRIR"
+  // affordance. We start the suspense at "revealing" stage right
+  // away. Without the flag, the page renders the closed envelope
+  // (idle). This avoids relying on client-side hydration for the
+  // open action.
+  const shouldReveal = searchParams.reveal === "1";
 
   const outcome = await openCode(normalized);
 
@@ -172,6 +185,8 @@ export default async function SobrePage({
       <EnvelopeFlow
         pack={pack}
         country={country}
+        openHref={`/sobre/${encodeURIComponent(normalized)}?reveal=1`}
+        initialStage={shouldReveal ? "revealing" : "idle"}
         ctaSlot={
           <section className="mx-auto flex w-full max-w-sm flex-col items-center gap-3">
             <Link
