@@ -1,4 +1,4 @@
-import { render, screen, act } from "@testing-library/react";
+import { render, screen, act, fireEvent } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("framer-motion", async () => {
@@ -79,7 +79,7 @@ const CtaSlot = (): JSX.Element => (
   </a>
 );
 
-describe("EnvelopeFlow", () => {
+describe("EnvelopeFlow (interactive suspense)", () => {
   beforeEach(() => {
     vi.useFakeTimers();
   });
@@ -88,50 +88,48 @@ describe("EnvelopeFlow", () => {
     vi.useRealTimers();
   });
 
-  it("renders the pack reveal (cards visible from SSR) and country attribute", () => {
+  it("renders in `idle` stage by default: envelope visible, no cards revealed yet", () => {
     const { container } = render(
       <EnvelopeFlow pack={pack} country="SV" ctaSlot={<CtaSlot />} />,
     );
     const root = container.querySelector("[data-envelope-flow]");
-    expect(root).not.toBeNull();
-    expect(root?.getAttribute("data-country")).toBe("SV");
-    expect(container.querySelector("[data-pack-reveal]")).not.toBeNull();
-    // 5 cartas en el grid
-    const cards = container.querySelectorAll("[data-card]");
-    expect(cards.length).toBe(5);
+    expect(root?.getAttribute("data-stage")).toBe("idle");
+    expect(container.querySelector("[data-envelope-idle]")).not.toBeNull();
+    // CTAs ocultos mientras la grilla no esta lista
+    expect(screen.queryByTestId("cta-canjear")).toBeNull();
   });
 
-  it("starts in `intro` stage and transitions to `revealing` then `done`", () => {
+  it("renders the 'Abrir el sobre' button in idle stage", () => {
+    render(<EnvelopeFlow pack={pack} country="SV" ctaSlot={<CtaSlot />} />);
+    expect(
+      screen.getByRole("button", { name: /abrir el sobre/i }),
+    ).toBeInTheDocument();
+  });
+
+  it("transitions to `revealing` when the envelope is clicked, then to `done`", () => {
     const { container } = render(
       <EnvelopeFlow pack={pack} country="SV" ctaSlot={<CtaSlot />} />,
     );
-    let root = container.querySelector("[data-envelope-flow]");
-    expect(root?.getAttribute("data-stage")).toBe("intro");
-
-    // Intro = 900ms
+    const openBtn = screen.getByRole("button", { name: /abrir el sobre/i });
     act(() => {
-      vi.advanceTimersByTime(950);
+      fireEvent.click(openBtn);
     });
-    root = container.querySelector("[data-envelope-flow]");
+    let root = container.querySelector("[data-envelope-flow]");
     expect(root?.getAttribute("data-stage")).toBe("revealing");
 
-    // Reveal cascade = 5 * 180 + 600 = 1500ms
-    act(() => {
-      vi.advanceTimersByTime(1600);
-    });
+    // Advance well past 5 cards * 1100ms + 500ms transition.
+    // We do it in chunks to let React process state updates between.
+    for (let i = 0; i < 10; i += 1) {
+      act(() => {
+        vi.advanceTimersByTime(1200);
+      });
+    }
     root = container.querySelector("[data-envelope-flow]");
     expect(root?.getAttribute("data-stage")).toBe("done");
-  });
-
-  it("ctaSlot is rendered in DOM from the start (so the user can click even without JS)", () => {
-    render(
-      <EnvelopeFlow pack={pack} country="SV" ctaSlot={<CtaSlot />} />,
-    );
-    // ctaSlot está en el árbol desde el primer render — clave para SSR-safe.
     expect(screen.getByTestId("cta-canjear")).toBeInTheDocument();
   });
 
-  it("with skipAnimation=true jumps straight to `done`", () => {
+  it("with skipAnimation=true jumps straight to `done` and shows CTAs", () => {
     const { container } = render(
       <EnvelopeFlow
         pack={pack}
@@ -143,6 +141,9 @@ describe("EnvelopeFlow", () => {
     const root = container.querySelector("[data-envelope-flow]");
     expect(root?.getAttribute("data-stage")).toBe("done");
     expect(screen.getByTestId("cta-canjear")).toBeInTheDocument();
+    // Grilla con las 5 cartas
+    const grid = container.querySelector("[data-pack-reveal]");
+    expect(grid?.getAttribute("data-card-count")).toBe("5");
   });
 
   it("propagates `country` to data attribute", () => {
