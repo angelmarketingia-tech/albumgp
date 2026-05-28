@@ -9,9 +9,11 @@ Lectura obligatoria antes de tocar `/lib/security/`, `/lib/redis/` o endpoints e
 ## 1. Secretos
 
 - Solo en variables de entorno del servidor. NUNCA prefijados con `NEXT_PUBLIC_`.
-- Cliente nunca ve: `DATABASE_URL`, `DIRECT_DATABASE_URL`, `REDIS_URL`, `UPSTASH_REDIS_REST_*`, `WEBHOOK_CENTRAL_SECRET`.
+- Cliente nunca ve: `DATABASE_URL`, `DIRECT_DATABASE_URL`, `REDIS_URL`, `UPSTASH_REDIS_REST_*`, `WEBHOOK_CENTRAL_SECRET`, `AUTH_SECRET`, `MOCK_AUTH_PASSWORD`.
 - `.env.example` se commitea **sin valores**. Reales solo en Vercel/CI.
 - `WEBHOOK_CENTRAL_SECRET` mínimo 32 bytes random. Generar con `openssl rand -hex 32`.
+- `AUTH_SECRET` mínimo 32 bytes random (firma cookies JWT de Auth.js). Mismo generador. **Requerido en producción** — sin él, la app crashea al arrancar (intencional, fail-fast).
+- `MOCK_AUTH_PASSWORD` SOLO en dev. El provider mock se rehúsa a inicializar si `NODE_ENV=production`.
 - No loggear secretos. No incluirlos en mensajes de error.
 
 ## 2. Flujo de validación de código (resumen)
@@ -77,6 +79,25 @@ Códigos de error permitidos (enum cerrado, ver `response.ts`):
 
 Cualquier desambiguación útil va a logs estructurados server-side.
 
+## 6.5. Auth (Fase 3 — Ola 1)
+
+Stub mock de Auth.js v5 detrás de una abstracción `IdentityProvider` para que el día de mañana el swap a OIDC no toque `/api/redeem`.
+
+Piezas:
+
+- `lib/auth/auth-config.ts` — `NextAuth({...})` con un único Credentials provider de nombre `'mock'`. Session strategy `'jwt'`, cookies `httpOnly` + `sameSite=lax` + `secure` solo en prod. Callbacks meten `account_id` en el JWT y exponen únicamente `session.user.id` al cliente (email y name se borran en `session()`).
+- `lib/auth/mock-credentials.ts` — validador puro (sin Auth.js), testeable en aislamiento. **Lanza si `NODE_ENV === 'production'`**. Whitelist hardcodeada (`admin@test.local`, `user1@test.local`, `user2@test.local`), password en `MOCK_AUTH_PASSWORD`. `account_id` derivado como `'mock:' + sha256(email).slice(0, 16)` — estable, opaco y namespaced.
+- `lib/auth/identity.ts` — interfaz `IdentityProvider.resolveAccountId(req)` que devuelve `string | null`. Implementación única hoy: `MockCredentialsIdentityProvider` (consume `auth()` de Auth.js). `getIdentityProvider()` lanza en producción para fail-fast (la implementación real OIDC se cableará aquí).
+- `lib/auth/require.ts` — `requireAccountId(req)` devuelve discriminated union `{ ok: true; accountId } | { ok: false; response }`. Mapea errores del provider a `genericError(500, 'internal')` y "sin sesión" a `genericError(401, 'unauthenticated')`.
+- `app/api/auth/[...nextauth]/route.ts` — re-exporta los handlers de Auth.js bajo `/api/auth/*`.
+- `app/auth/signin/page.tsx` — server component con form + server action que llama `signIn('mock', ...)`. Mensaje genérico de error, campo honeypot `website`, banner "Modo de pruebas (dev)".
+
+Reglas operativas:
+
+- Endpoints que requieren sesión llaman `requireAccountId(req)` y devuelven `result.response` si `!result.ok`.
+- Nunca importar `lib/auth/identity.ts` desde un componente `'use client'`.
+- En prod sin OIDC configurado: `getIdentityProvider()` lanza al primer uso. Intencional.
+
 ## 6. Webhook saliente (firma)
 
 Cuando `/api/redeem` confirme un canje, dispara un webhook firmado a la plataforma central (Fase 3). Esquema definido hoy en `lib/security/webhook.ts`:
@@ -102,6 +123,6 @@ Cuando `/api/redeem` confirme un canje, dispara un webhook firmado a la platafor
 
 - **CSP estricta con nonces** — hoy `'unsafe-inline'` por requerimiento de Next 14. Migrar a nonces antes de prod final. Ref en `lib/security/headers.ts`.
 - **IP detrás de Vercel Edge** — usar `request.ip` (Edge runtime) o `geo` cuando movamos endpoints calientes a Edge, en vez de confiar en `x-forwarded-for`. Comentario TODO en `keyForIp`.
-- **SSO real (Fase 3)** — hoy bloqueado. Cuando entre, validar PKCE/state, no almacenar tokens en localStorage, cookies `Secure+HttpOnly+SameSite=Lax`.
+- **SSO real (Fase 3)** — Ola 1 entregada como **stub mock detrás de `IdentityProvider`** (ver §6.5). Swap a OIDC pendiente: el reemplazo es agregar `OidcIdentityProvider` en `lib/auth/identity.ts` y enrutar `getIdentityProvider()` cuando `env.AUTH_PROVIDER === 'oidc'`. Cuando entre OIDC: validar PKCE/state, no almacenar tokens en localStorage, cookies `Secure+HttpOnly+SameSite=Lax` (ya configuradas).
 - **Auditoría de canjes** — tabla `redemptions` ya en schema. Falta sink inmutable (append-only) y retención mínima.
 - **Verificación de edad / 18+** — responsabilidad del dueño / SSO. La UI muestra avisos (AGENTS.md sec. 12).
