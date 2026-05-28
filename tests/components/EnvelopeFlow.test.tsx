@@ -88,58 +88,50 @@ describe("EnvelopeFlow", () => {
     vi.useRealTimers();
   });
 
-  it("after hydration, settles into the `opening` phase: renders EnvelopeOpening, NOT PackReveal nor ctaSlot", () => {
-    // EnvelopeFlow is SSR-safe: the very first render is `done` so users see
-    // the pack even if hydration fails. Once the client hydrates, the
-    // useEffect rewinds to `opening` to play the animation. RTL flushes
-    // effects synchronously, so by the time render() returns we should see
-    // the post-hydration state.
+  it("renders the pack reveal (cards visible from SSR) and country attribute", () => {
     const { container } = render(
       <EnvelopeFlow pack={pack} country="SV" ctaSlot={<CtaSlot />} />,
     );
     const root = container.querySelector("[data-envelope-flow]");
-    expect(root?.getAttribute("data-phase")).toBe("opening");
-    expect(container.querySelector("[data-envelope-opening]")).not.toBeNull();
-    expect(container.querySelector("[data-pack-reveal]")).toBeNull();
-    expect(screen.queryByTestId("cta-canjear")).toBeNull();
-  });
-
-  it("after the opening timer elapses, transitions to `revealing`: mounts PackReveal and unmounts EnvelopeOpening", () => {
-    const { container } = render(
-      <EnvelopeFlow pack={pack} country="SV" ctaSlot={<CtaSlot />} />,
-    );
-    act(() => {
-      // EnvelopeOpening total is ~1600ms — give it a comfortable margin.
-      vi.advanceTimersByTime(1700);
-    });
-    const root = container.querySelector("[data-envelope-flow]");
-    expect(root?.getAttribute("data-phase")).toBe("revealing");
-    expect(container.querySelector("[data-envelope-opening]")).toBeNull();
+    expect(root).not.toBeNull();
+    expect(root?.getAttribute("data-country")).toBe("SV");
     expect(container.querySelector("[data-pack-reveal]")).not.toBeNull();
-    // CTAs still hidden in `revealing`.
-    expect(screen.queryByTestId("cta-canjear")).toBeNull();
+    // 5 cartas en el grid
+    const cards = container.querySelectorAll("[data-card]");
+    expect(cards.length).toBe(5);
   });
 
-  it("after PackReveal finishes, transitions to `done` and renders the ctaSlot", () => {
+  it("starts in `intro` stage and transitions to `revealing` then `done`", () => {
     const { container } = render(
       <EnvelopeFlow pack={pack} country="SV" ctaSlot={<CtaSlot />} />,
     );
-    // Phase 1: opening timer fires (~1600ms total).
+    let root = container.querySelector("[data-envelope-flow]");
+    expect(root?.getAttribute("data-stage")).toBe("intro");
+
+    // Intro = 900ms
     act(() => {
-      vi.advanceTimersByTime(1700);
+      vi.advanceTimersByTime(950);
     });
-    // Phase 2: PackReveal mounted; its effect schedules a timer at this
-    // point. Advance enough for it to fire (5 * 150 + 500 = 1250ms).
+    root = container.querySelector("[data-envelope-flow]");
+    expect(root?.getAttribute("data-stage")).toBe("revealing");
+
+    // Reveal cascade = 5 * 180 + 600 = 1500ms
     act(() => {
-      vi.advanceTimersByTime(1300);
+      vi.advanceTimersByTime(1600);
     });
-    const root = container.querySelector("[data-envelope-flow]");
-    expect(root?.getAttribute("data-phase")).toBe("done");
+    root = container.querySelector("[data-envelope-flow]");
+    expect(root?.getAttribute("data-stage")).toBe("done");
+  });
+
+  it("ctaSlot is rendered in DOM from the start (so the user can click even without JS)", () => {
+    render(
+      <EnvelopeFlow pack={pack} country="SV" ctaSlot={<CtaSlot />} />,
+    );
+    // ctaSlot está en el árbol desde el primer render — clave para SSR-safe.
     expect(screen.getByTestId("cta-canjear")).toBeInTheDocument();
-    expect(container.querySelector("[data-pack-reveal]")).not.toBeNull();
   });
 
-  it("with skipAnimation=true, jumps straight to `done` and renders ctaSlot", () => {
+  it("with skipAnimation=true jumps straight to `done`", () => {
     const { container } = render(
       <EnvelopeFlow
         pack={pack}
@@ -149,17 +141,15 @@ describe("EnvelopeFlow", () => {
       />,
     );
     const root = container.querySelector("[data-envelope-flow]");
-    expect(root?.getAttribute("data-phase")).toBe("done");
-    expect(container.querySelector("[data-envelope-opening]")).toBeNull();
-    expect(container.querySelector("[data-pack-reveal]")).not.toBeNull();
+    expect(root?.getAttribute("data-stage")).toBe("done");
     expect(screen.getByTestId("cta-canjear")).toBeInTheDocument();
   });
 
-  it("propagates `country` into EnvelopeOpening during the opening phase", () => {
+  it("propagates `country` to data attribute", () => {
     const { container } = render(
       <EnvelopeFlow pack={pack} country="GT" ctaSlot={<CtaSlot />} />,
     );
-    const opening = container.querySelector("[data-envelope-opening]");
-    expect(opening?.getAttribute("data-country")).toBe("GT");
+    const root = container.querySelector("[data-envelope-flow]");
+    expect(root?.getAttribute("data-country")).toBe("GT");
   });
 });

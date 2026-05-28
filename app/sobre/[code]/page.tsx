@@ -21,7 +21,6 @@ import { redirect } from "next/navigation";
 import { Logo } from "@/components/brand/Logo";
 import { EnvelopeBackground } from "@/components/envelope/EnvelopeBackground";
 import { EnvelopeFlow } from "@/components/envelope/EnvelopeFlow";
-import { ActionButton } from "@/components/ui/ActionButton";
 import {
   DEPOSIT_URLS,
   LEGAL_NOTICES,
@@ -142,10 +141,11 @@ export default async function SobrePage({
           </h1>
           <p className="mt-2 text-sm text-white/80">{detail}</p>
         </div>
-        <Link href="/" className="inline-block">
-          <ActionButton variant="primary" size="md">
-            Volver a inicio
-          </ActionButton>
+        <Link
+          href="/"
+          className="inline-flex h-11 items-center justify-center rounded-md bg-gp-white px-5 font-sans text-base font-bold uppercase tracking-wide text-gp-green shadow-md transition-colors hover:bg-gp-gray-light/90"
+        >
+          Volver a inicio
         </Link>
         <footer className="mt-4 text-center text-xs text-white/70">
           <p>{LEGAL_NOTICES.ageGate}</p>
@@ -176,21 +176,17 @@ export default async function SobrePage({
           <section className="mx-auto flex w-full max-w-sm flex-col items-center gap-3">
             <Link
               href={`/canjear?code=${encodeURIComponent(normalized)}`}
-              className="block w-full"
+              className="inline-flex h-14 w-full items-center justify-center rounded-md bg-gp-white px-7 font-sans text-lg font-bold uppercase tracking-wide text-gp-green shadow-md transition-colors hover:bg-gp-gray-light/90 focus-visible:ring-2 focus-visible:ring-gp-gold focus-visible:ring-offset-2 focus-visible:ring-offset-gp-green"
             >
-              <ActionButton variant="primary" size="lg" className="w-full">
-                Canjear premios
-              </ActionButton>
+              Canjear premios
             </Link>
             <a
               href={depositUrl}
               target="_blank"
               rel="noopener noreferrer"
-              className="block w-full"
+              className="inline-flex h-11 w-full items-center justify-center rounded-md border border-gp-white bg-transparent px-5 font-sans text-base font-bold uppercase tracking-wide text-gp-white transition-colors hover:bg-gp-white/10 focus-visible:ring-2 focus-visible:ring-gp-gold focus-visible:ring-offset-2 focus-visible:ring-offset-gp-green"
             >
-              <ActionButton variant="secondary" size="md" className="w-full">
-                Depósitos
-              </ActionButton>
+              Depósitos
             </a>
           </section>
         }
