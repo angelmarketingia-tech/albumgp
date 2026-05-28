@@ -8,7 +8,9 @@ const config: Config = {
   theme: {
     extend: {
       colors: {
-        // Official brand palette (see AGENTS.md §2.2).
+        // PLACEHOLDER: aproximacion del logo. Confirmar con
+        // [CONFIRMAR_HEX_OFICIALES] del Manual de Marca
+        // (brand/MANUAL_DE_MARCA.pdf, ver brand/README.md).
         gp: {
           "green-core": "#008745",
           green: "#01783E",
