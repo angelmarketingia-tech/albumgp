@@ -11,6 +11,7 @@ export type {
   DepositMatchPrize,
   PhysicalPrize,
   ExternalCodePrize,
+  CollectiblePrize,
   NonePrize,
   VariablePoolEntry,
   PackResult,

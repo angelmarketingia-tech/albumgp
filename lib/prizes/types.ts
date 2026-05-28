@@ -7,6 +7,7 @@ export type PrizeType =
   | "deposit_match"
   | "physical"
   | "external_code"
+  | "collectible"
   | "none";
 
 export type Currency = "USD" | "GTQ";
@@ -47,6 +48,26 @@ export type ExternalCodePrize = {
   label: string;
 };
 
+/**
+ * Cartas coleccionables decorativas que pasan al álbum del usuario.
+ * NO son canjeables; el atractivo es completar la colección
+ * (gamificación tipo álbum de cromos). Su rareza modula la probabilidad
+ * y el feedback visual al usuario, pero no representa un valor monetario.
+ *
+ * - `collectible_id`: identificador estable para deduplicar en el álbum.
+ * - `image_url`: opcional hasta que Diseño provea los assets finales
+ *   (Fase 4-6). Mientras tanto se renderiza un placeholder genérico.
+ */
+export type CollectiblePrize = {
+  type: "collectible";
+  collectible_id: string;
+  label: string;
+  rarity: "common" | "rare" | "epic" | "legendary";
+  // Optional under `exactOptionalPropertyTypes` — must be `| undefined`
+  // to align with Zod's `.optional()` inference.
+  image_url?: string | undefined;
+};
+
 export type NonePrize = {
   type: "none";
   label: string;
@@ -58,6 +79,8 @@ export type Prize =
   | DepositMatchPrize
   | PhysicalPrize
   | ExternalCodePrize
+  // Order: premio (canjeable) → coleccionable (decorativo) → nada.
+  | CollectiblePrize
   | NonePrize;
 
 export type VariablePoolEntry = {

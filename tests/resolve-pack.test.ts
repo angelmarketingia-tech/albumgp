@@ -181,6 +181,69 @@ describe("resolvePack — versioning + schema", () => {
   });
 });
 
+describe("resolvePack — collectibles pool", () => {
+  it("pool with collectibles + none returns only entries from the configured pool", () => {
+    const pool: VariablePoolEntry[] = [
+      {
+        prize: {
+          type: "collectible",
+          collectible_id: "delantero-estrella",
+          label: "Delantero estrella",
+          rarity: "common",
+        },
+        weight: 5,
+      },
+      {
+        prize: {
+          type: "collectible",
+          collectible_id: "joven-promesa",
+          label: "Joven promesa",
+          rarity: "epic",
+        },
+        weight: 1,
+      },
+      {
+        prize: { type: "none", label: "No ganaste" },
+        weight: 4,
+      },
+    ];
+
+    const allowedIds = new Set(["delantero-estrella", "joven-promesa"]);
+    const seenTypes = new Set<string>();
+    const seenCollectibleIds = new Set<string>();
+
+    // Sweep the [0,1) interval across many rolls so each weighted band is hit.
+    const rolls = Array.from({ length: 200 }, (_, i) => i / 200);
+    const rng = seqRng(rolls);
+
+    for (let i = 0; i < 200; i++) {
+      const res = resolvePack(
+        { guaranteed, variable_pool: pool, cards_per_pack: 5 },
+        rng,
+      );
+      expect(res.variable).toHaveLength(2);
+      for (const card of res.variable) {
+        seenTypes.add(card.type);
+        if (card.type === "collectible") {
+          // Stays inside the configured pool — never invents an id.
+          expect(allowedIds.has(card.collectible_id)).toBe(true);
+          seenCollectibleIds.add(card.collectible_id);
+        } else {
+          // The only non-collectible allowed by this pool is `none`.
+          expect(card.type).toBe("none");
+        }
+      }
+    }
+
+    // Both collectible variants AND the none entry must have been drawn
+    // at least once across the deterministic sweep.
+    expect(seenTypes.has("collectible")).toBe(true);
+    expect(seenTypes.has("none")).toBe(true);
+    expect(seenCollectibleIds.has("delantero-estrella")).toBe(true);
+    expect(seenCollectibleIds.has("joven-promesa")).toBe(true);
+  });
+});
+
 describe("resolvePack — defaultRng", () => {
   it("default RNG produces floats in [0, 1)", () => {
     for (let i = 0; i < 100; i++) {

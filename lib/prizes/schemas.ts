@@ -44,6 +44,18 @@ export const externalCodePrizeSchema = z.object({
   label: z.string().min(1),
 });
 
+// `collectible_id` must be lowercase kebab-style: [a-z0-9-] so it travels
+// safely through JSON, URLs and DOM ids without escaping or collision risk.
+export const COLLECTIBLE_ID_REGEX = /^[a-z0-9-]+$/;
+
+export const collectiblePrizeSchema = z.object({
+  type: z.literal("collectible"),
+  collectible_id: z.string().min(1).regex(COLLECTIBLE_ID_REGEX),
+  label: z.string().min(1),
+  rarity: z.enum(["common", "rare", "epic", "legendary"]),
+  image_url: z.string().url().optional(),
+});
+
 export const nonePrizeSchema = z.object({
   type: z.literal("none"),
   label: z.string().min(1),
@@ -55,6 +67,7 @@ export const prizeSchema: z.ZodType<Prize> = z.discriminatedUnion("type", [
   depositMatchPrizeSchema,
   physicalPrizeSchema,
   externalCodePrizeSchema,
+  collectiblePrizeSchema,
   nonePrizeSchema,
 ]);
 

@@ -211,6 +211,121 @@ describe("prizeSchema — external_code", () => {
   });
 });
 
+describe("prizeSchema — collectible", () => {
+  it("accepts a common collectible without image_url", () => {
+    expect(
+      prizeSchema.safeParse({
+        type: "collectible",
+        collectible_id: "delantero-estrella",
+        label: "Delantero estrella",
+        rarity: "common",
+      }).success,
+    ).toBe(true);
+  });
+  it("accepts a rare collectible", () => {
+    expect(
+      prizeSchema.safeParse({
+        type: "collectible",
+        collectible_id: "arquero-impasable",
+        label: "Arquero impasable",
+        rarity: "rare",
+      }).success,
+    ).toBe(true);
+  });
+  it("accepts an epic collectible", () => {
+    expect(
+      prizeSchema.safeParse({
+        type: "collectible",
+        collectible_id: "joven-promesa",
+        label: "Joven promesa",
+        rarity: "epic",
+      }).success,
+    ).toBe(true);
+  });
+  it("accepts a legendary collectible with image_url", () => {
+    expect(
+      prizeSchema.safeParse({
+        type: "collectible",
+        collectible_id: "leyenda-01",
+        label: "Leyenda",
+        rarity: "legendary",
+        image_url: "https://cdn.example.com/cartas/leyenda-01.png",
+      }).success,
+    ).toBe(true);
+  });
+  it("rejects rarity outside the enum", () => {
+    expect(
+      prizeSchema.safeParse({
+        type: "collectible",
+        collectible_id: "x",
+        label: "x",
+        rarity: "mythic",
+      }).success,
+    ).toBe(false);
+  });
+  it("rejects collectible_id with a space", () => {
+    expect(
+      prizeSchema.safeParse({
+        type: "collectible",
+        collectible_id: "delantero estrella",
+        label: "x",
+        rarity: "common",
+      }).success,
+    ).toBe(false);
+  });
+  it("rejects collectible_id with uppercase characters", () => {
+    expect(
+      prizeSchema.safeParse({
+        type: "collectible",
+        collectible_id: "Delantero-Estrella",
+        label: "x",
+        rarity: "common",
+      }).success,
+    ).toBe(false);
+  });
+  it("rejects collectible_id with disallowed punctuation", () => {
+    expect(
+      prizeSchema.safeParse({
+        type: "collectible",
+        collectible_id: "delantero_estrella",
+        label: "x",
+        rarity: "common",
+      }).success,
+    ).toBe(false);
+  });
+  it("rejects empty collectible_id", () => {
+    expect(
+      prizeSchema.safeParse({
+        type: "collectible",
+        collectible_id: "",
+        label: "x",
+        rarity: "common",
+      }).success,
+    ).toBe(false);
+  });
+  it("rejects empty label", () => {
+    expect(
+      prizeSchema.safeParse({
+        type: "collectible",
+        collectible_id: "ok-id",
+        label: "",
+        rarity: "common",
+      }).success,
+    ).toBe(false);
+  });
+  it("rejects image_url that is not a URL", () => {
+    expect(
+      prizeSchema.safeParse({
+        type: "collectible",
+        collectible_id: "ok-id",
+        label: "ok",
+        rarity: "common",
+        image_url: "not-a-url",
+      }).success,
+    ).toBe(false);
+  });
+});
+
 describe("prizeSchema — none", () => {
   it("accepts No ganaste", () => {
     expect(
