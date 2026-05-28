@@ -51,30 +51,38 @@ vi.mock("next/image", () => ({
 
 // --- helper -----------------------------------------------------------------
 
-async function loadEntryPage(): Promise<() => JSX.Element> {
+interface EntryPageProps {
+  searchParams: { error?: string };
+}
+
+async function loadEntryPage(): Promise<
+  (props: EntryPageProps) => JSX.Element
+> {
   const mod = (await import("@/app/(entry)/page")) as {
-    default: () => JSX.Element;
+    default: (props: EntryPageProps) => JSX.Element;
   };
   return mod.default;
 }
+
+const EMPTY_SEARCH: EntryPageProps = { searchParams: {} };
 
 // =============================================================================
 
 describe("EntryPage — render smoke", () => {
   it("renders without throwing", async () => {
     const EntryPage = await loadEntryPage();
-    expect(() => render(<EntryPage />)).not.toThrow();
+    expect(() => render(<EntryPage {...EMPTY_SEARCH} />)).not.toThrow();
   });
 
   it("renders the Logo (alt='GanaPlay')", async () => {
     const EntryPage = await loadEntryPage();
-    render(<EntryPage />);
+    render(<EntryPage {...EMPTY_SEARCH} />);
     expect(screen.getByAltText("GanaPlay")).toBeInTheDocument();
   });
 
   it("renders the main heading 'Abrí tu sobre'", async () => {
     const EntryPage = await loadEntryPage();
-    render(<EntryPage />);
+    render(<EntryPage {...EMPTY_SEARCH} />);
     expect(
       screen.getByRole("heading", { name: /abrí tu sobre/i }),
     ).toBeInTheDocument();
@@ -82,7 +90,7 @@ describe("EntryPage — render smoke", () => {
 
   it("renders the EntryForm (code input + submit button)", async () => {
     const EntryPage = await loadEntryPage();
-    render(<EntryPage />);
+    render(<EntryPage {...EMPTY_SEARCH} />);
     expect(screen.getByLabelText(/código de canje/i)).toBeInTheDocument();
     expect(
       screen.getByRole("button", { name: /abrir sobre/i }),
@@ -91,7 +99,7 @@ describe("EntryPage — render smoke", () => {
 
   it("renders the 'Iniciar sesión' link with the correct callbackUrl", async () => {
     const EntryPage = await loadEntryPage();
-    render(<EntryPage />);
+    render(<EntryPage {...EMPTY_SEARCH} />);
     const link = screen.getByRole("link", {
       name: /iniciar sesión para reclamar premios/i,
     });
@@ -103,7 +111,7 @@ describe("EntryPage — render smoke", () => {
 
   it("renders the mandatory legal notices (AGENTS.md §12)", async () => {
     const EntryPage = await loadEntryPage();
-    render(<EntryPage />);
+    render(<EntryPage {...EMPTY_SEARCH} />);
     expect(screen.getByText(LEGAL_NOTICES.ageGate)).toBeInTheDocument();
     expect(
       screen.getByText(LEGAL_NOTICES.responsibleGaming),
