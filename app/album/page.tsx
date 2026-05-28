@@ -10,25 +10,29 @@
 //   - Si por alguna razón el endpoint falla / no parsea → empty state. NO
 //     rompemos la página: el agente backend puede no haber desplegado todavía
 //     en el flujo de dev, o puede haber un error transitorio.
-//   - Render minimal de redemptions agrupadas por fecha. Las "5 cartas" son
-//     `<div>`s simples — mismo placeholder que /sobre/[code].
+//   - Vista de colección agrupada por rareza + contadores visuales
+//     (`<AlbumSummary>`) + repisas (`<RarityShelf>`) + historial de premios
+//     reales reclamados (sin coleccionables ni "none").
+//   - Las cartas usan `<Card size="sm">` (128x192) — placeholder div fue
+//     reemplazado por el componente rico.
 
 import Link from "next/link";
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
+import type { JSX } from "react";
+
 import { Logo } from "@/components/brand/Logo";
+import { Card } from "@/components/cards/Card";
+import { AlbumSummary } from "@/components/album/AlbumSummary";
+import { RarityShelf } from "@/components/album/RarityShelf";
 import { auth } from "@/lib/auth/auth-config";
 import { LEGAL_NOTICES } from "@/lib/brand/constants";
+import { groupAlbumByRarity, categorizePrize } from "@/lib/album/group";
 import type {
   AlbumRedemption,
   AlbumResponse,
 } from "@/lib/album/types";
-import type { Prize } from "@/lib/prizes/types";
-import {
-  formatRedeemedAt,
-  prizeShortDescription,
-  rarityLabel,
-} from "@/lib/ui/format";
+import { formatRedeemedAt } from "@/lib/ui/format";
 
 export const dynamic = "force-dynamic";
 
@@ -48,8 +52,7 @@ function selfUrl(pathname: string): string {
  * Cookie header so the API sees the same session as this RSC.
  *
  * Returns `null` on ANY failure — the caller renders an empty state rather
- * than a stack trace. This keeps the page resilient while the backend
- * agent is still finishing work in parallel.
+ * than a stack trace.
  */
 async function fetchAlbum(): Promise<AlbumResponse | null> {
   const h = headers();
@@ -79,78 +82,41 @@ async function fetchAlbum(): Promise<AlbumResponse | null> {
 
 // ---------- Render helpers ---------------------------------------------------
 
-function PrizeMeta({ prize }: { prize: Prize }): JSX.Element {
-  switch (prize.type) {
-    case "sports_credit":
-      return (
-        <p className="text-base font-semibold text-gp-gold">
-          {prize.amount} {prize.currency}
-        </p>
-      );
-    case "casino_spins":
-      return (
-        <>
-          <p className="text-base font-semibold text-gp-gold">
-            {prize.count} giros
-          </p>
-          <p className="text-[10px] text-white/70">{prize.game_name}</p>
-        </>
-      );
-    case "deposit_match":
-      return (
-        <p className="text-base font-semibold text-gp-gold">
-          x{prize.multiplier}
-        </p>
-      );
-    case "physical":
-      return <p className="text-xs text-white">{prize.label}</p>;
-    case "external_code":
-      return <p className="text-xs text-white">{prize.provider}</p>;
-    case "collectible":
-      return (
-        <p className="text-[10px] uppercase tracking-wider text-white/80">
-          {rarityLabel(prize.rarity)}
-        </p>
-      );
-    case "none":
-      return <p className="text-xs text-white/60">Sin premio</p>;
-    default: {
-      const _exhaustive: never = prize;
-      void _exhaustive;
-      return <></>;
-    }
-  }
-}
-
-function RedemptionBlock({
+/**
+ * Bloque de un canje histórico — solo muestra los premios reales (no
+ * coleccionables ni "none"). Si la redención no tuvo premios reales, el
+ * caller debe omitir este bloque.
+ */
+function RealPrizesRedemptionBlock({
   redemption,
 }: {
   redemption: AlbumRedemption;
-}): JSX.Element {
+}): JSX.Element | null {
+  const realPrizes = redemption.prizes.filter(
+    (item) => categorizePrize(item.prize) === "real_prizes",
+  );
+  if (realPrizes.length === 0) {
+    return null;
+  }
+
   return (
-    <article className="rounded border border-white/20 bg-white/5 p-3">
-      <header className="mb-2 flex items-center justify-between text-xs text-white/70">
+    <article
+      data-redemption
+      className="rounded border border-white/20 bg-white/5 p-3"
+    >
+      <header className="mb-3 flex items-center justify-between text-xs text-white/70">
         <span>{formatRedeemedAt(redemption.redeemed_at)}</span>
         <span>{redemption.country}</span>
       </header>
-      <div className="grid grid-cols-5 gap-2">
-        {redemption.prizes.map((item, i) => {
-          const isNone = item.prize.type === "none";
-          return (
-            <div
-              key={`p-${String(i)}`}
-              aria-label={prizeShortDescription(item.prize)}
-              className={[
-                "flex aspect-[2/3] flex-col items-center justify-center rounded border p-1 text-center",
-                isNone
-                  ? "border-white/15 bg-white/5 text-white/50"
-                  : "border-white/30 bg-white/10 text-white",
-              ].join(" ")}
-            >
-              <PrizeMeta prize={item.prize} />
-            </div>
-          );
-        })}
+      <div className="flex flex-wrap justify-center gap-3">
+        {realPrizes.map((item, i) => (
+          <Card
+            key={`p-${String(i)}`}
+            prize={item.prize}
+            size="sm"
+            revealed
+          />
+        ))}
       </div>
     </article>
   );
@@ -188,8 +154,25 @@ export default async function AlbumPage({
   const album = await fetchAlbum();
   const justRedeemed = searchParams.just_redeemed === "1";
 
+  const view =
+    album !== null && album.redemptions.length > 0
+      ? groupAlbumByRarity(album)
+      : null;
+
+  // Pre-filter redemptions: only those with at least one real prize get a
+  // history block. Coleccionables y "none" se muestran arriba (resumen /
+  // repisas), no se duplican en el historial.
+  const redemptionsWithRealPrizes =
+    album !== null
+      ? album.redemptions.filter((r) =>
+          r.prizes.some(
+            (item) => categorizePrize(item.prize) === "real_prizes",
+          ),
+        )
+      : [];
+
   return (
-    <main className="mx-auto flex min-h-screen max-w-md flex-col gap-6 px-5 pb-8 pt-8">
+    <main className="mx-auto flex min-h-screen max-w-3xl flex-col gap-6 px-5 pb-8 pt-8">
       <header className="flex flex-col items-center gap-3 text-center">
         <Logo variant="blanco" width={140} />
         <h1 className="font-display text-2xl font-bold text-white">
@@ -206,37 +189,55 @@ export default async function AlbumPage({
         </div>
       ) : null}
 
-      {album === null || album.redemptions.length === 0 ? (
+      {album === null || album.redemptions.length === 0 || view === null ? (
         <EmptyState />
       ) : (
         <>
-          <section
-            aria-label="Resumen"
-            className="rounded border border-white/20 bg-white/5 p-3 text-center text-sm text-white/90"
-          >
-            <p>
-              <span className="font-semibold text-white">
-                {album.total_cards_count}
-              </span>{" "}
-              cartas obtenidas ·{" "}
-              <span className="font-semibold text-white">
-                {album.unique_collectibles_count}
-              </span>{" "}
-              coleccionables únicas
-            </p>
-          </section>
+          <AlbumSummary
+            total_cards={view.total_cards}
+            unique_collectibles={view.unique_collectibles}
+            real_prizes={view.real_prizes_count}
+            empty={view.empty_count}
+          />
 
           <section
-            aria-label="Historial de canjes"
-            className="flex flex-col gap-3"
+            aria-label="Colección por rareza"
+            className="flex flex-col gap-6"
           >
-            {album.redemptions.map((r, i) => (
-              <RedemptionBlock
-                key={`r-${String(i)}-${r.redeemed_at}`}
-                redemption={r}
-              />
-            ))}
+            <RarityShelf
+              rarity="legendary"
+              slots={view.collectibles_by_rarity.legendary}
+            />
+            <RarityShelf
+              rarity="epic"
+              slots={view.collectibles_by_rarity.epic}
+            />
+            <RarityShelf
+              rarity="rare"
+              slots={view.collectibles_by_rarity.rare}
+            />
+            <RarityShelf
+              rarity="common"
+              slots={view.collectibles_by_rarity.common}
+            />
           </section>
+
+          {redemptionsWithRealPrizes.length > 0 ? (
+            <section
+              aria-label="Premios reclamados"
+              className="flex flex-col gap-3"
+            >
+              <h2 className="font-display text-lg font-bold text-white">
+                Premios reclamados
+              </h2>
+              {redemptionsWithRealPrizes.map((r, i) => (
+                <RealPrizesRedemptionBlock
+                  key={`r-${String(i)}-${r.redeemed_at}`}
+                  redemption={r}
+                />
+              ))}
+            </section>
+          ) : null}
         </>
       )}
 
