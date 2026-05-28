@@ -24,6 +24,7 @@ import { EnvelopeFlow } from "@/components/envelope/EnvelopeFlow";
 import {
   DEPOSIT_URLS,
   LEGAL_NOTICES,
+  SIGNIN_URLS,
 } from "@/lib/brand/constants";
 import {
   normalizeCode,
@@ -170,6 +171,7 @@ export default async function SobrePage({
 
   const { pack, country } = outcome;
   const depositUrl = DEPOSIT_URLS[country];
+  const signinUrl = SIGNIN_URLS[country];
 
   return (
     <EnvelopeBackground country={country}>
@@ -189,14 +191,16 @@ export default async function SobrePage({
         initialStage={shouldReveal ? "revealing" : "idle"}
         ctaSlot={
           <section className="mx-auto flex w-full max-w-sm flex-col items-center gap-3">
-            <Link
-              href={`/canjear?code=${encodeURIComponent(normalized)}`}
+            <a
+              href={signinUrl}
+              target="_blank"
+              rel="noopener noreferrer"
               className="inline-flex h-14 w-full items-center justify-center gap-2 rounded-md bg-gradient-to-r from-gp-green via-gp-green to-emerald-500 px-7 font-sans text-lg font-bold uppercase tracking-wide text-gp-white shadow-lg shadow-gp-green/40 transition-transform hover:scale-[1.02] focus-visible:ring-2 focus-visible:ring-gp-gold focus-visible:ring-offset-2 focus-visible:ring-offset-gp-green-deep"
             >
               <span aria-hidden>✦</span>
-              <span>Guardar en álbum</span>
+              <span>Canjear premios</span>
               <span aria-hidden>✦</span>
-            </Link>
+            </a>
             <a
               href={depositUrl}
               target="_blank"

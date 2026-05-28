@@ -20,6 +20,21 @@ export const DEPOSIT_URLS: Readonly<Record<"SV" | "GT", string>> = Object.freeze
 });
 
 /**
+ * URLs externas oficiales de inicio de sesión por país (plataforma
+ * principal de GanaPlay). El botón "Canjear premios" lleva al usuario a
+ * esta URL para que se loguee con sus credenciales reales de GanaPlay
+ * (no las del mock interno).
+ *
+ * [CONFIRMAR_SIGNIN_PATH] — `/iniciar-sesion` es el path en español más
+ * natural y los sitios responden 200 ahí. Si el path oficial es otro
+ * (`/login`, `/entrar`, etc.), reemplazar acá y propagarlo a producción.
+ */
+export const SIGNIN_URLS: Readonly<Record<"SV" | "GT", string>> = Object.freeze({
+  SV: "https://ganaplay.sv/iniciar-sesion",
+  GT: "https://ganaplay.gt/iniciar-sesion",
+});
+
+/**
  * Avisos legales obligatorios — AGENTS.md §12. Deben aparecer en la UI.
  */
 export const LEGAL_NOTICES = Object.freeze({
