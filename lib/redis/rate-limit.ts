@@ -61,7 +61,8 @@ export async function rateLimit(
 /* -------------------------------------------------------------------------- */
 
 /**
- * Extrae la primera IP del header `x-forwarded-for`.
+ * Extrae la IP del cliente del header `x-forwarded-for`, devolviéndola
+ * saneada o `'unknown'` si no es válida.
  *
  * Vercel pone la IP real del cliente como primer elemento de la cadena
  * (`client, proxy1, proxy2`). Tomamos sólo la primera, recortada y sanitizada
@@ -75,12 +76,19 @@ export async function rateLimit(
  * evitar spoofing de `x-forwarded-for` cuando la app corra detrás de un
  * proxy adicional. Hoy en serverless functions el header es confiable.
  */
-export function keyForIp(req: Request, suffix: string): string {
+export function extractClientIp(req: Request): string {
   const xff = req.headers.get("x-forwarded-for") ?? "";
   const first = xff.split(",")[0]?.trim() ?? "";
   const sanitized = /^[0-9a-fA-F.:]+$/.test(first) ? first : "";
-  const ip = sanitized || "unknown";
-  return `rl:ip:${suffix}:${ip}`;
+  return sanitized || "unknown";
+}
+
+/**
+ * Construye una key de rate-limit por IP. Reusa `extractClientIp` para
+ * obtener la IP saneada y le prepende el namespace `rl:ip:<suffix>:`.
+ */
+export function keyForIp(req: Request, suffix: string): string {
+  return `rl:ip:${suffix}:${extractClientIp(req)}`;
 }
 
 /**
