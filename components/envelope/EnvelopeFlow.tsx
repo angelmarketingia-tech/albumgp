@@ -8,49 +8,45 @@ import { Card } from "@/components/cards/Card";
 import type { PackResult, Prize } from "@/lib/prizes/types";
 
 /**
- * Coreografia con suspenso, imitando el patron de juegos de cartas
- * coleccionables:
+ * Coreografia con suspenso para el reveal del pack.
  *
- *   1. Sobre cerrado en pantalla con halo dorado pulsante + "TOCA PARA
- *      ABRIR". El usuario hace click cuando esta listo.
- *   2. Cada carta se revela UNA POR UNA con flip 3D. Banner arriba grita
- *      "¡CARTA ÉPICA!" / "¡CARTA RARA!" / "PREMIO" segun la rareza/tipo.
- *   3. Las cartas reveladas quedan visibles al lado (se acumulan), no se
- *      reemplazan, para que el usuario vea su botin crecer.
- *   4. Cuando termina, los CTAs (Canjear, Depositos) aparecen.
+ * Tiene DOS etapas a nivel pagina, controladas por searchParams:
  *
- * Server-side el flujo arranca con el sobre cerrado (estado idle). Si
- * JS no hidrata, el usuario al menos ve el sobre + un fallback automatico
- * via CSS que dispara el reveal tras N segundos para no quedarse trabado.
+ *   1. idle      Sin `?reveal=1`. Muestra el sobre cerrado pulsante
+ *                con un <a href='?reveal=1'> nativo. Cero JS necesario.
+ *   2. revealing Con `?reveal=1`. Server renderiza TODAS las cartas + CTAs
+ *                desde el HTML inicial. Las animaciones de aparicion
+ *                escalonada se hacen 100% via CSS keyframes con
+ *                `animation-delay` por indice — no useState, no setTimeout
+ *                que dependa de hidratacion. Si JS hidrata: bonus
+ *                (banner de notificacion va flasheando segun la carta
+ *                "activa"). Si no hidrata: el usuario igual ve toda la
+ *                animacion CSS y los botones para canjear/depositar.
+ *
+ * Esta arquitectura sobrevive a hidratacion inconsistente porque la
+ * informacion critica (cartas, CTAs) esta en el DOM desde el primer
+ * render del servidor.
  */
+
+type Stage = "idle" | "revealing";
 
 export interface EnvelopeFlowProps {
   pack: PackResult;
   country: "SV" | "GT";
   ctaSlot: ReactNode;
   /**
-   * URL a la que apunta el "tocar para abrir". Cuando este link se
-   * sigue, el server vuelve a renderizar la pagina con `initialStage`
-   * en `'revealing'`, asi el reveal arranca SIN depender de JS para
-   * el click. Si no se provee, se usa un onClick local (requiere
-   * hidratacion).
+   * URL a la que apunta el "tocar para abrir". Si se provee, el sobre
+   * cerrado renderiza un <a> nativo y abre con navegacion full-page.
    */
-  openHref?: string;
+  openHref?: string | undefined;
   /**
-   * Etapa inicial. Por defecto `'idle'` — el sobre cerrado espera
-   * tocar. Si la pagina padre detecta `?reveal=1` (u otra senal),
-   * puede pasar `'revealing'` para empezar el suspenso al instante
-   * sin esperar el click del cliente.
+   * Etapa inicial. `'revealing'` cuando el server detecto `?reveal=1`.
+   * Por default `'idle'`.
    */
   initialStage?: Stage;
   /** Salta el suspenso (util en tests). */
   skipAnimation?: boolean;
 }
-
-type Stage =
-  | "idle"      // sobre esperando click
-  | "revealing" // mostrando cartas una por una
-  | "done";     // todas reveladas, CTAs visibles
 
 /** Label de la notificacion arriba segun el premio. */
 function notificationFor(prize: Prize): { label: string; color: string } {
@@ -66,18 +62,19 @@ function notificationFor(prize: Prize): { label: string; color: string } {
   if (prize.type === "none") {
     return { label: "SIGUE INTENTANDO", color: "text-gp-gray-light" };
   }
-  // Premios reales (sports_credit / casino_spins / deposit_match / etc.)
   return { label: "¡PREMIO!", color: "text-gp-gold" };
 }
 
-const REVEAL_INTERVAL_MS = 1100;
-const NOTIFICATION_FLASH_MS = 700;
+// Tiempos de la coreografia (ms). Coinciden con `animation-delay` de cada
+// carta en CSS. La carta i-esima aparece en T_REVEAL_BASE + i * STEP.
+const T_REVEAL_BASE_MS = 100;
+const REVEAL_STEP_MS = 1100;
+const REVEAL_DURATION_MS = 700;
 
 /**
  * Boton/Link que abre el sobre. Si la pagina padre paso `openHref`,
  * usamos un <a> real con full navigation — funciona aunque la
- * hidratacion de React no haya llegado. Si no, fallback a un
- * <button> con onClick (requiere JS hidratado).
+ * hidratacion de React no haya llegado.
  */
 function EnvelopeOpenTrigger({
   openHref,
@@ -164,54 +161,55 @@ export function EnvelopeFlow({
   ];
 
   const resolvedInitialStage: Stage = skipAnimation
-    ? "done"
+    ? "revealing"
     : initialStage ?? "idle";
-  const [stage, setStage] = useState<Stage>(resolvedInitialStage);
-  /** Index de la siguiente carta a revelar (0..items.length). */
-  const [revealedCount, setRevealedCount] = useState<number>(() => {
-    if (skipAnimation || resolvedInitialStage === "done") return items.length;
-    if (resolvedInitialStage === "revealing") return 1;
-    return 0;
-  });
-  /** Flag para animar el banner de notificacion al cambiar de carta. */
-  const [flashKey, setFlashKey] = useState<number>(
-    resolvedInitialStage === "revealing" ? 1 : 0,
-  );
 
-  // Auto-avance: cuando estamos en `revealing`, cada N ms revela la
-  // proxima carta hasta llegar al total. Despues pasa a `done`.
+  const [stage] = useState<Stage>(resolvedInitialStage);
+
+  // BONUS: si JS hidrata, vamos rotando el banner de notificacion
+  // segun la carta activa. Si no hidrata, el banner queda en el premio
+  // del slot 0 (mejor que nada). No bloquea el resto de la animacion.
+  const [activeIndex, setActiveIndex] = useState<number>(skipAnimation ? items.length - 1 : 0);
+
   useEffect(() => {
     if (stage !== "revealing") return;
-    if (revealedCount >= items.length) {
-      const t = setTimeout(() => setStage("done"), 500);
-      return (): void => clearTimeout(t);
+    if (skipAnimation) return;
+    let cancelled = false;
+    const timers: ReturnType<typeof setTimeout>[] = [];
+    for (let i = 1; i < items.length; i += 1) {
+      const t = setTimeout(() => {
+        if (cancelled) return;
+        setActiveIndex(i);
+      }, i * REVEAL_STEP_MS);
+      timers.push(t);
     }
-    const t = setTimeout(() => {
-      setRevealedCount((c) => c + 1);
-      setFlashKey((k) => k + 1);
-    }, REVEAL_INTERVAL_MS);
+    return (): void => {
+      cancelled = true;
+      timers.forEach((t) => clearTimeout(t));
+    };
+  }, [stage, skipAnimation, items.length]);
+
+  // Cuando termina la cascada, despues de un margen, mostramos el
+  // banner "¡SOBRE COMPLETO!". Si JS no hidrata, igual cae en None
+  // y se renderiza sobre la pagina por CSS animation-delay.
+  const [showCompleteBanner, setShowCompleteBanner] = useState<boolean>(
+    skipAnimation,
+  );
+  useEffect(() => {
+    if (stage !== "revealing") return;
+    if (skipAnimation) {
+      setShowCompleteBanner(true);
+      return;
+    }
+    const totalMs = items.length * REVEAL_STEP_MS + REVEAL_DURATION_MS;
+    const t = setTimeout(() => setShowCompleteBanner(true), totalMs);
     return (): void => clearTimeout(t);
-  }, [stage, revealedCount, items.length]);
+  }, [stage, skipAnimation, items.length]);
 
-  const handleOpen = (): void => {
-    if (stage !== "idle") return;
-    setStage("revealing");
-    setRevealedCount(1);
-    setFlashKey(1);
-  };
-
-  // Carta actualmente "destacada" — la ultima revelada.
-  const latestIndex = revealedCount - 1;
-  const latestPrize =
-    latestIndex >= 0 && latestIndex < items.length
-      ? items[latestIndex]?.prize
-      : undefined;
-  const notif = latestPrize ? notificationFor(latestPrize) : null;
-
-  return (
-    <div data-envelope-flow data-stage={stage} data-country={country}>
-      {/* ============ ETAPA IDLE: SOBRE INTERACTIVO ============ */}
-      {stage === "idle" ? (
+  // ============ IDLE ============
+  if (stage === "idle") {
+    return (
+      <div data-envelope-flow data-stage="idle" data-country={country}>
         <div
           className="mx-auto flex max-w-md flex-col items-center gap-4 pt-4"
           data-envelope-idle="true"
@@ -223,119 +221,122 @@ export function EnvelopeFlow({
             ABRIR
           </h3>
 
-          <EnvelopeOpenTrigger openHref={openHref} onClick={handleOpen} />
+          <EnvelopeOpenTrigger
+            openHref={openHref}
+            onClick={(): void => {
+              /* fallback: nada — el padre deberia haber pasado openHref */
+            }}
+          />
 
           <p className="mt-6 text-center text-xs uppercase tracking-widest text-gp-gray-light">
             Toca el sobre para revelar tus cartas
           </p>
         </div>
-      ) : null}
 
-      {/* ============ ETAPA REVEALING/DONE: NOTIFICACION + CARTAS ============ */}
-      {stage !== "idle" ? (
-        <div className="flex flex-col items-center gap-6">
-          {/* Notificacion arriba */}
-          {notif !== null && stage === "revealing" ? (
-            <div
-              key={flashKey}
-              data-notification
-              className={`flex items-center justify-center gap-2 text-2xl font-extrabold uppercase tracking-widest sm:text-3xl ${notif.color}`}
-              style={{
-                animation: `notif-flash ${NOTIFICATION_FLASH_MS}ms ease-out both`,
-              }}
-            >
-              <span aria-hidden>🔥</span>
-              <span>{notif.label}</span>
-            </div>
-          ) : null}
+        <style>{`
+          @keyframes envelope-pulse {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.03); }
+          }
+          @keyframes envelope-float {
+            0%, 100% { transform: translateY(0); }
+            50% { transform: translateY(-6px); }
+          }
+          @keyframes envelope-glow {
+            0%, 100% { opacity: 0.5; }
+            50% { opacity: 1; }
+          }
+        `}</style>
+      </div>
+    );
+  }
 
-          {stage === "done" ? (
-            <div
-              className="text-center text-2xl font-extrabold uppercase tracking-widest text-gp-gold sm:text-3xl"
-              style={{
-                animation: "notif-flash 600ms ease-out both",
-              }}
-            >
+  // ============ REVEALING (server-render-all + CSS staggered) ============
+  const activePrize = items[activeIndex]?.prize;
+  const notif = activePrize ? notificationFor(activePrize) : null;
+
+  // Tiempo total (ms) cuando todas las cartas terminaron su animacion.
+  const totalRevealMs = items.length * REVEAL_STEP_MS + REVEAL_DURATION_MS;
+
+  return (
+    <div data-envelope-flow data-stage="revealing" data-country={country}>
+      <div className="flex flex-col items-center gap-6">
+        {/* Banner de notificacion: cambia segun JS activeIndex. Si no
+            hidrata, queda en el slot 0. */}
+        {notif !== null ? (
+          <div
+            key={activeIndex}
+            data-notification
+            className={`flex items-center justify-center gap-2 text-2xl font-extrabold uppercase tracking-widest sm:text-3xl ${notif.color}`}
+            style={{
+              animation: "notif-flash 700ms ease-out both",
+            }}
+          >
+            <span aria-hidden>🔥</span>
+            <span>{notif.label}</span>
+          </div>
+        ) : null}
+
+        {/* Grilla: las 5 cartas SE RENDERIZAN TODAS desde el server.
+            CSS animation-delay por indice arma la cascada visual SIN
+            useState ni setTimeout. Si JS no hidrata, igual se ve la
+            cascada porque las @keyframes corren solas. */}
+        <div
+          data-pack-reveal="true"
+          data-card-count={items.length}
+          className="grid grid-cols-1 justify-items-center gap-4 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-5"
+        >
+          {items.map((item, i) => {
+            const delayMs = T_REVEAL_BASE_MS + i * REVEAL_STEP_MS;
+            return (
+              <div
+                key={item.key}
+                className="flex flex-col items-center"
+                style={{
+                  // animation-fill-mode: both -> arranca en estado "0%"
+                  // (invisible) y queda en estado "100%" al terminar.
+                  // Esto significa que en SSR, antes de que la animacion
+                  // arranque, la carta es invisible (opacity 0) pero
+                  // pasa a visible automaticamente sin JS.
+                  animation: skipAnimation
+                    ? "card-instant 1ms both"
+                    : `card-pop ${REVEAL_DURATION_MS}ms cubic-bezier(0.16, 1, 0.3, 1) ${delayMs}ms both`,
+                }}
+              >
+                {item.guaranteed ? (
+                  <span className="mb-2 inline-flex items-center rounded-sm bg-gp-gold-gradient px-2 py-0.5 font-sans text-[10px] font-bold uppercase tracking-wide text-gp-white shadow-sm">
+                    Garantizado
+                  </span>
+                ) : null}
+                <Card prize={item.prize} revealed size="md" />
+              </div>
+            );
+          })}
+        </div>
+
+        {/* Banner "SOBRE COMPLETO" + CTAs: visibles via CSS animation
+            con delay = totalRevealMs. Si JS hidrata, showCompleteBanner
+            tambien se vuelve true. */}
+        <div
+          className="flex flex-col items-center gap-6"
+          style={{
+            animation: skipAnimation
+              ? "cta-appear 1ms both"
+              : `cta-appear 500ms ease-out ${totalRevealMs}ms both`,
+          }}
+        >
+          {showCompleteBanner || skipAnimation ? (
+            <div className="text-center text-2xl font-extrabold uppercase tracking-widest text-gp-gold sm:text-3xl">
               ¡SOBRE COMPLETO!
             </div>
           ) : null}
-
-          {/* Grilla de cartas: las ya reveladas mas la "actual" que entra
-              con animacion. Las que aun no salieron se muestran como
-              placeholders sutiles. */}
-          <div
-            data-pack-reveal="true"
-            data-card-count={items.length}
-            className="grid grid-cols-1 justify-items-center gap-4 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-5"
-          >
-            {items.map((item, i) => {
-              const isRevealed = i < revealedCount;
-              const isLatest = i === revealedCount - 1 && stage === "revealing";
-              return (
-                <div
-                  key={item.key}
-                  className="flex flex-col items-center"
-                  style={{
-                    animation: isLatest
-                      ? `card-pop ${NOTIFICATION_FLASH_MS}ms cubic-bezier(0.16, 1, 0.3, 1) both`
-                      : undefined,
-                    opacity: isRevealed ? 1 : 0.25,
-                    transform: isRevealed ? "none" : "scale(0.95)",
-                    transition:
-                      "opacity 300ms ease-out, transform 300ms ease-out",
-                  }}
-                >
-                  {item.guaranteed && isRevealed ? (
-                    <span className="mb-2 inline-flex items-center rounded-sm bg-gp-gold-gradient px-2 py-0.5 font-sans text-[10px] font-bold uppercase tracking-wide text-gp-white shadow-sm">
-                      Garantizado
-                    </span>
-                  ) : null}
-                  {isRevealed ? (
-                    <Card prize={item.prize} revealed size="md" />
-                  ) : (
-                    /* Carta cerrada placeholder mientras no se revela. */
-                    <div
-                      aria-hidden
-                      className="flex aspect-[2/3] w-48 items-center justify-center rounded-lg border border-gp-gold/60 bg-gp-radial shadow-md"
-                    >
-                      <span className="font-display text-sm font-bold uppercase tracking-widest text-gp-gold/80">
-                        ?
-                      </span>
-                    </div>
-                  )}
-                </div>
-              );
-            })}
+          <div data-envelope-ctas="true" className="w-full">
+            {ctaSlot}
           </div>
-
-          {/* CTAs cuando todo termino */}
-          {stage === "done" ? (
-            <div
-              className="mt-6 w-full"
-              style={{
-                animation: "cta-appear 500ms ease-out both",
-              }}
-            >
-              {ctaSlot}
-            </div>
-          ) : null}
         </div>
-      ) : null}
+      </div>
 
-      {/* Keyframes inline para no depender de Tailwind config. */}
       <style>{`
-        @keyframes envelope-pulse {
-          0%, 100% { transform: scale(1); }
-          50% { transform: scale(1.03); }
-        }
-        @keyframes envelope-float {
-          0%, 100% { transform: translateY(0); }
-          50% { transform: translateY(-6px); }
-        }
-        @keyframes envelope-glow {
-          0%, 100% { opacity: 0.5; }
-          50% { opacity: 1; }
-        }
         @keyframes notif-flash {
           0% { opacity: 0; transform: scale(0.7) translateY(-10px); }
           50% { opacity: 1; transform: scale(1.1) translateY(0); }
@@ -345,6 +346,9 @@ export function EnvelopeFlow({
           0% { opacity: 0; transform: scale(0.6) rotate(-6deg); }
           50% { opacity: 1; transform: scale(1.08) rotate(2deg); }
           100% { opacity: 1; transform: scale(1) rotate(0deg); }
+        }
+        @keyframes card-instant {
+          0%, 100% { opacity: 1; transform: none; }
         }
         @keyframes cta-appear {
           0% { opacity: 0; transform: translateY(20px); }
