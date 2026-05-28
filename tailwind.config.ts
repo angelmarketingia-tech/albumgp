@@ -8,20 +8,42 @@ const config: Config = {
   theme: {
     extend: {
       colors: {
-        // PLACEHOLDER: aproximacion del logo. Confirmar con
-        // [CONFIRMAR_HEX_OFICIALES] del Manual de Marca
-        // (brand/MANUAL_DE_MARCA.pdf, ver brand/README.md).
+        // Paleta oficial extraída del Manual de Marca (brand/MANUAL_DE_MARCA.pdf,
+        // páginas "PALETA DE COLOR" y "MANEJO DE LOGO"). Verde y blanco son las
+        // únicas variantes permitidas del logo (verde sobre claro, blanco sobre
+        // verde/oscuro). Los grises son secundarios — nunca más prominentes que
+        // el verde. El dorado NO existe en el Manual: `gold` es una propuesta
+        // nuestra para acentos de premios destacados (ver [CONFIRMAR_DORADO_OFICIAL]).
         gp: {
-          "green-core": "#008745",
-          green: "#01783E",
-          "green-deep": "#00602F",
+          green: "#00783E",       // Verde principal — RGB 0,120,62
+          "green-deep": "#034419", // Verde oscuro — RGB 3,68,20
           white: "#FFFFFF",
-          gold: "#FFD600",
+          "gray-dark-1": "#6D6E71",
+          "gray-dark-2": "#333333",
+          "gray-light": "#A7A9AC",
+          // [CONFIRMAR_DORADO_OFICIAL] — propuesta del líder para acentos.
+          // El Manual define un "gradiente dorado libre" pero no un HEX puntual.
+          gold: "#D4A017",
         },
       },
       backgroundImage: {
+        // Gradiente de marca: el Manual lo define como "no lineal".
+        // Aproximamos con radial que enfatiza verde principal en el centro y
+        // baja a verde oscuro hacia los bordes.
         "gp-radial":
-          "radial-gradient(circle at 50% 45%, #008745 0%, #01783E 70%, #00602F 100%)",
+          "radial-gradient(circle at 50% 45%, #00783E 0%, #034419 100%)",
+        // Gradiente dorado libre (referencia al Manual). Útil para acentos de
+        // premios destacados / CTA secundarios.
+        "gp-gold-gradient":
+          "linear-gradient(135deg, #B8860B 0%, #D4A017 50%, #F4D03F 100%)",
+      },
+      fontFamily: {
+        // [CONFIRMAR_TIPOGRAFIA_OFICIAL] — el Manual especifica Stage Grotesk
+        // (titulares + cuerpo) y Qartella (decorativa). Ambas son comerciales.
+        // Hasta tener licencia, usamos near-matches gratuitas vía Google Fonts:
+        // DM Sans ≈ Stage Grotesk, Fraunces ≈ Qartella.
+        sans: ["var(--font-gp-sans)", "system-ui", "sans-serif"],
+        display: ["var(--font-gp-display)", "Georgia", "serif"],
       },
     },
   },
