@@ -139,17 +139,23 @@ describe("EnvelopeFlow (server-rendered cards + CSS staggered reveal)", () => {
     const root = container.querySelector("[data-envelope-flow]");
     expect(root?.getAttribute("data-stage")).toBe("revealing");
     expect(screen.getByTestId("cta-canjear")).toBeInTheDocument();
-    // El divider de cierre aparece inmediatamente con skipAnimation. Copy:
-    // "Sobre {TIER} · N premio(s)". Sin tier defectea a "GANAPLAY".
-    // Usamos function-matcher porque React puede dividir el texto en
-    // multiples nodes dentro del span (interpolaciones).
+    // El clímax de recompensa aparece inmediatamente con skipAnimation. Copy:
+    // un badge "Sobre {TIER} completo" + un resumen "Ganaste: ...". Sin tier
+    // defectea a "GanaPlay". function-matcher porque React parte el texto en
+    // varios nodos dentro del span (interpolaciones).
+    // Badge "Sobre {TIER} completo" (con ✦ decorativos) y el resumen "Ganaste:".
     expect(
-      screen.getByText((_content, el) => {
-        if (!el || el.tagName.toLowerCase() !== "span") return false;
-        const t = el.textContent?.replace(/\s+/g, " ").trim() ?? "";
-        return /^Sobre\s+\S+\s+·\s+\d+\s+premio/i.test(t);
-      }),
-    ).toBeInTheDocument();
+      screen.getAllByText((_content, el) => {
+        const t = el?.textContent?.replace(/\s+/g, " ").trim() ?? "";
+        return /sobre\s+.+\s+completo/i.test(t);
+      }).length,
+    ).toBeGreaterThan(0);
+    expect(
+      screen.getAllByText((_content, el) => {
+        const t = el?.textContent?.replace(/\s+/g, " ").trim() ?? "";
+        return /^Ganaste:/i.test(t);
+      }).length,
+    ).toBeGreaterThan(0);
   });
 
   it("propagates `country` to data attribute on both stages", () => {

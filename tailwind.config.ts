@@ -64,10 +64,6 @@ const config: Config = {
           "50%": { opacity: "1", transform: "scale(1.1) translateY(0)" },
           "100%": { opacity: "1", transform: "scale(1) translateY(0)" },
         },
-        "card-pop": {
-          "0%": { opacity: "0", transform: "translateY(-80px) scale(0.7)" },
-          "100%": { opacity: "1", transform: "translateY(0) scale(1)" },
-        },
         "cta-appear": {
           "0%": { opacity: "0", transform: "translateY(20px)" },
           "100%": { opacity: "1", transform: "none" },
@@ -82,7 +78,6 @@ const config: Config = {
         shimmer: "shimmer 3s linear infinite",
         "page-in": "page-in 240ms cubic-bezier(0.22,1,0.36,1) both",
         "notif-flash": "notif-flash 700ms ease-out both",
-        "card-pop": "card-pop 700ms cubic-bezier(0.34,1.56,0.64,1) both",
         "cta-appear": "cta-appear 500ms ease-out both",
         "rarity-glow": "rarity-glow 2.4s ease-in-out infinite",
       },
