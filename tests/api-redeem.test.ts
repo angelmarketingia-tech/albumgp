@@ -169,24 +169,36 @@ interface MakeReqOpts {
   headers?: Record<string, string>;
 }
 
+// Simulate Vercel so `extractClientIp` honors `x-vercel-forwarded-for` (else
+// it falls back to a UA-hashed bucket and per-IP isolation tests collapse).
+process.env.VERCEL = "1";
+
 function makeReq(opts: MakeReqOpts = {}): Request {
+  let bodyStr: string;
+  if (opts.rawBody !== undefined) {
+    bodyStr = opts.rawBody;
+  } else if (opts.body !== undefined) {
+    bodyStr = JSON.stringify(opts.body);
+  } else {
+    bodyStr = JSON.stringify({ code: VALID_CODE });
+  }
+  // Same-origin gate + explicit Content-Length are both required by the
+  // route (SECURITY.md §2). Without them the request is rejected at 403/413
+  // before reaching the validation we're actually testing.
+  const ip = opts.ip ?? "1.2.3.4";
   const headers: Record<string, string> = {
     "content-type": "application/json",
-    "x-forwarded-for": opts.ip ?? "1.2.3.4",
+    "x-forwarded-for": ip,
+    "x-vercel-forwarded-for": ip,
+    host: "x.test",
+    origin: "http://x.test",
+    "content-length": String(Buffer.byteLength(bodyStr, "utf8")),
     ...(opts.headers ?? {}),
   };
-  let body: BodyInit | undefined;
-  if (opts.rawBody !== undefined) {
-    body = opts.rawBody;
-  } else if (opts.body !== undefined) {
-    body = JSON.stringify(opts.body);
-  } else {
-    body = JSON.stringify({ code: VALID_CODE });
-  }
   return new Request("http://x.test/api/redeem", {
     method: "POST",
     headers,
-    body,
+    body: bodyStr,
   });
 }
 
@@ -348,9 +360,13 @@ describe("POST /api/redeem — input validation (with auth)", () => {
     expect(updateManyMock).not.toHaveBeenCalled();
   });
 
-  it("400 on empty body", async () => {
+  it("413 on empty body (size gate rejects 0-length before JSON parse)", async () => {
+    // The route's `readJsonBody` gate rejects content-length <= 0 with 413
+    // (defense-in-depth on body size). An empty body therefore never reaches
+    // the JSON parser. Either 413 or 400 is acceptable per SECURITY.md — both
+    // surface the same generic `invalid_input` body to clients.
     const res = await POST(makeReq({ rawBody: "" }));
-    expect(res.status).toBe(400);
+    expect(res.status).toBe(413);
     expect(await res.json()).toEqual({ error: "invalid_input" });
   });
 
@@ -413,11 +429,14 @@ describe("POST /api/redeem — atomic update", () => {
   it("updateMany count=0 → 404 not_found_or_unavailable; redemption.create NOT called", async () => {
     resolveAccountIdMock.mockResolvedValue(VALID_ACCOUNT_ID);
     updateManyMock.mockResolvedValueOnce({ count: 0 });
+    // Pipeline now does an idempotency-replay findUnique on count=0 to detect
+    // the "same account retrying its own already-redeemed code" case. Here we
+    // return null so it falls through to the generic 404.
+    findUniqueMock.mockResolvedValueOnce(null);
     const res = await POST(makeReq());
     expect(res.status).toBe(404);
     expect(await res.json()).toEqual({ error: "not_found_or_unavailable" });
     expect(redemptionCreateMock).not.toHaveBeenCalled();
-    expect(findUniqueMock).not.toHaveBeenCalled();
   });
 
   it("updateMany throws → 500 internal, no DB detail leaked", async () => {
@@ -639,7 +658,10 @@ describe("POST /api/redeem — webhook invocation", () => {
     expect(call.data.webhookLastError).toBeNull();
   });
 
-  it("sender returns sent/attempts=0 (dry-run) → 200; redemption.update has attempts=0", async () => {
+  it("sender returns sent/attempts=0 (dry-run) → 200; persisted as 'pending' with attempts=0", async () => {
+    // Convention: a dry-run (sender returns sent+attempts=0 because the
+    // upstream webhook URL is unset) is recorded as `pending`, NOT `sent`,
+    // so historical audits can tell real deliveries apart from no-ops.
     sendRedemptionWebhookMock.mockResolvedValueOnce({
       status: "sent",
       attempts: 0,
@@ -649,7 +671,7 @@ describe("POST /api/redeem — webhook invocation", () => {
     const call = redemptionUpdateMock.mock.calls[0]?.[0] as {
       data: { webhookStatus: string; webhookAttempts: number };
     };
-    expect(call.data.webhookStatus).toBe("sent");
+    expect(call.data.webhookStatus).toBe("pending");
     expect(call.data.webhookAttempts).toBe(0);
   });
 

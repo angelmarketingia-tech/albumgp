@@ -29,6 +29,22 @@ vi.mock("next/navigation", () => ({
   useRouter: (): { push: ReturnType<typeof vi.fn> } => ({ push: vi.fn() }),
 }));
 
+// `useFormStatus` ships with React 19 / Next's bundled React, but is absent
+// from React 18.3.1's `react-dom` runtime used by Vitest. Re-export everything
+// and provide a no-op stub so SubmitButton renders in jsdom.
+vi.mock("react-dom", async () => {
+  const actual = await vi.importActual<typeof import("react-dom")>("react-dom");
+  return {
+    ...actual,
+    useFormStatus: (): {
+      pending: boolean;
+      data: null;
+      method: null;
+      action: null;
+    } => ({ pending: false, data: null, method: null, action: null }),
+  };
+});
+
 vi.mock("next/image", () => ({
   default: (props: {
     src: string;
@@ -97,12 +113,13 @@ describe("EntryPage — render smoke", () => {
     ).toBeInTheDocument();
   });
 
-  it("renders the 'Iniciar sesión' link with the correct callbackUrl", async () => {
+  // El CTA de signin se simplifico de la oracion completa a un link discreto
+  // "Mi album ->" en la esquina top-right (decision visual del workflow
+  // 2026-05-28: la CTA primaria es Abrir sobre, signin es secundaria).
+  it("renders the 'Mi album' link with the correct callbackUrl", async () => {
     const EntryPage = await loadEntryPage();
     render(<EntryPage {...EMPTY_SEARCH} />);
-    const link = screen.getByRole("link", {
-      name: /iniciar sesión para reclamar premios/i,
-    });
+    const link = screen.getByRole("link", { name: /mi álbum/i });
     expect(link).toHaveAttribute(
       "href",
       "/auth/signin?callbackUrl=/album",

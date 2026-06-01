@@ -137,6 +137,7 @@ describe("prizeSchema — physical", () => {
       prizeSchema.safeParse({
         type: "physical",
         sku: "CINEMA_COMBO_1",
+        category: "cinema_combo",
         label: "Entrada de cine + combo",
         redemption_instructions: "Presenta el código en taquilla",
       }).success,
@@ -147,6 +148,7 @@ describe("prizeSchema — physical", () => {
       prizeSchema.safeParse({
         type: "physical",
         sku: "MERCH_JERSEY",
+        category: "jersey_local",
         label: "Jersey",
         redemption_instructions: "Envío a domicilio",
       }).success,
@@ -157,6 +159,7 @@ describe("prizeSchema — physical", () => {
       prizeSchema.safeParse({
         type: "physical",
         sku: "",
+        category: "other",
         label: "x",
         redemption_instructions: "y",
       }).success,
@@ -167,7 +170,18 @@ describe("prizeSchema — physical", () => {
       prizeSchema.safeParse({
         type: "physical",
         sku: "X",
+        category: "other",
         label: "x",
+      }).success,
+    ).toBe(false);
+  });
+  it("rejects missing category", () => {
+    expect(
+      prizeSchema.safeParse({
+        type: "physical",
+        sku: "X",
+        label: "x",
+        redemption_instructions: "y",
       }).success,
     ).toBe(false);
   });

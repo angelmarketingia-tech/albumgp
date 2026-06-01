@@ -79,30 +79,38 @@ export const authConfig: NextAuthConfig = {
     signIn: "/auth/signin",
   },
 
-  providers: [
-    Credentials({
-      id: "mock",
-      name: "mock",
-      credentials: {
-        email: { label: "Email", type: "email" },
-        password: { label: "Password", type: "password" },
-      },
-      async authorize(raw) {
-        // Delegates to a pure helper so we can unit-test it without Auth.js.
-        // `validateMockCredentials` throws hard when NODE_ENV === 'production';
-        // we re-throw with a generic message so Auth.js doesn't leak internals.
-        try {
-          const user = validateMockCredentials({
-            email: raw?.email,
-            password: raw?.password,
-          });
-          return user;
-        } catch {
-          throw new Error("auth_config_invalid");
-        }
-      },
-    }),
-  ],
+  // Provider registration is gated at CONFIG TIME on NODE_ENV. Previously the
+  // mock Credentials provider was always registered and only the inner
+  // `validateMockCredentials` runtime check protected prod — that leaks when
+  // NODE_ENV is unset / 'staging' / 'preview'. Belt-and-suspenders: also keep
+  // the runtime throw inside `validateMockCredentials`.
+  providers:
+    process.env.NODE_ENV === "production"
+      ? []
+      : [
+          Credentials({
+            id: "mock",
+            name: "mock",
+            credentials: {
+              email: { label: "Email", type: "email" },
+              password: { label: "Password", type: "password" },
+            },
+            async authorize(raw) {
+              // Delegates to a pure helper so we can unit-test it without Auth.js.
+              // `validateMockCredentials` throws hard when NODE_ENV === 'production';
+              // we re-throw with a generic message so Auth.js doesn't leak internals.
+              try {
+                const user = validateMockCredentials({
+                  email: raw?.email,
+                  password: raw?.password,
+                });
+                return user;
+              } catch {
+                throw new Error("auth_config_invalid");
+              }
+            },
+          }),
+        ],
 
   callbacks: {
     /**
@@ -131,6 +139,10 @@ export const authConfig: NextAuthConfig = {
           session.user.email = "";
         }
         if ("name" in session.user) {
+          // Intentionally scrubbed to avoid leaking PII to the wire. Callers
+          // that derive a `firstName` greeting (e.g. the album page) MUST
+          // treat empty string as "no display name" and fall back — do NOT
+          // render `Hola, !` when this is "".
           session.user.name = "";
         }
       }

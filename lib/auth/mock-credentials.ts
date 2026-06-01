@@ -16,7 +16,7 @@
  *     can't collide with mock ones.
  */
 
-import { createHash } from "node:crypto";
+import { createHash, timingSafeEqual } from "node:crypto";
 
 /**
  * Whitelisted dev emails. Hardcoded as the source of truth. The env var
@@ -112,7 +112,11 @@ export function validateMockCredentials(
     // Fail closed: no password configured => provider rejects everyone.
     return null;
   }
-  if (password !== expected) {
+  // Constant-time compare to avoid leaking password length/prefix via timing
+  // if this helper is ever reused outside the dev mock (e.g. OIDC fallback).
+  const a = Buffer.from(password, "utf8");
+  const b = Buffer.from(expected, "utf8");
+  if (a.length !== b.length || !timingSafeEqual(a, b)) {
     return null;
   }
 

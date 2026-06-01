@@ -1,19 +1,9 @@
-"use client";
-
-import { motion } from "framer-motion";
-import type { JSX } from "react";
-import { useMemo } from "react";
+import type { CSSProperties, JSX } from "react";
 
 /**
- * Burst de confeti dorado disparado al revelar una carta de premio real
- * (no se usa en collectible common ni en none).
- *
- * - 16 partículas distribuidas en 360°, salen desde el centro de la carta.
- * - Duración total ~700ms con stagger sutil.
- * - Sin assets externos: cuadritos / círculos con `boxShadow` dorado.
- *
- * Pure decorativo, `aria-hidden`. Respeta `prefers-reduced-motion` desde
- * Framer Motion (cuando el usuario lo activa, las animaciones no corren).
+ * Burst de confeti dorado disparado al revelar una carta de premio real.
+ * Server component: precompute particles deterministically, hand off the
+ * animation to pure CSS keyframes (see app/globals.css `confetti-burst`).
  */
 
 const PARTICLE_COUNT = 16;
@@ -32,13 +22,11 @@ function buildParticles(): Particle[] {
   const particles: Particle[] = [];
   for (let i = 0; i < PARTICLE_COUNT; i += 1) {
     const angle = (i / PARTICLE_COUNT) * Math.PI * 2;
-    // Deterministic but varied: each particle gets a slight magnitude
-    // jitter so the burst doesn't look like a perfect circle.
     const magnitude = SPREAD_PX * (0.7 + ((i * 13) % 7) / 10);
     particles.push({
       id: i,
       dx: Math.cos(angle) * magnitude,
-      dy: Math.sin(angle) * magnitude,
+      dy: Math.sin(angle) * magnitude + 16,
       rotate: (i * 47) % 360,
       delay: (i % 4) * 40,
       size: 6 + ((i * 5) % 5),
@@ -47,48 +35,34 @@ function buildParticles(): Particle[] {
   return particles;
 }
 
+const PARTICLES: readonly Particle[] = buildParticles();
+
 export interface ConfettiProps {
   /** ms delay before the burst fires. Use to sync with card flip. */
   delay?: number;
 }
 
 export function Confetti({ delay = 0 }: ConfettiProps): JSX.Element {
-  const particles = useMemo(() => buildParticles(), []);
-
   return (
     <div
       aria-hidden
       className="pointer-events-none absolute inset-0 overflow-visible"
       data-confetti="true"
+      style={{ color: "#D4A017" }}
     >
-      {particles.map((p) => (
-        <motion.span
-          key={p.id}
-          className="absolute left-1/2 top-1/2 rounded-sm"
-          style={{
-            width: p.size,
-            height: p.size,
-            marginLeft: -p.size / 2,
-            marginTop: -p.size / 2,
-            background:
-              "linear-gradient(135deg, #FFE08A 0%, #D4A017 60%, #B8860B 100%)",
-            boxShadow: "0 0 6px 1px rgba(212, 160, 23, 0.7)",
-          }}
-          initial={{ opacity: 0, x: 0, y: 0, rotate: 0, scale: 0.3 }}
-          animate={{
-            opacity: [0, 1, 1, 0],
-            x: [0, p.dx * 0.6, p.dx],
-            y: [0, p.dy * 0.6, p.dy + 16],
-            rotate: [0, p.rotate / 2, p.rotate],
-            scale: [0.3, 1, 0.6],
-          }}
-          transition={{
-            duration: 0.75,
-            delay: (delay + p.delay) / 1000,
-            ease: "easeOut",
-          }}
-        />
-      ))}
+      {PARTICLES.map((p) => {
+        // CSS vars consumed by the `confetti-burst` keyframes.
+        const style: CSSProperties = {
+          ["--dx" as string]: `${p.dx}px`,
+          ["--dy" as string]: `${p.dy}px`,
+          ["--rot" as string]: `${p.rotate}deg`,
+          ["--size" as string]: `${p.size}px`,
+          marginLeft: `${-p.size / 2}px`,
+          marginTop: `${-p.size / 2}px`,
+          animationDelay: `${delay + p.delay}ms`,
+        };
+        return <span key={p.id} className="confetti-particle" style={style} />;
+      })}
     </div>
   );
 }

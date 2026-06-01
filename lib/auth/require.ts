@@ -33,20 +33,29 @@ export type RequireAccountIdResult =
 /**
  * Resolve the caller's `account_id` or return a ready-to-send 401/500.
  *
- * @param req      the inbound request — passed through to the IdentityProvider.
- * @param provider optional override (tests). Defaults to the configured
- *                 singleton from `getIdentityProvider()`.
+ * @param req              the inbound request — passed through to the IdentityProvider.
+ * @param providedOverride optional override (tests). When omitted, resolved
+ *                         INSIDE the try so config errors map to a sanitized 500.
  */
 export async function requireAccountId(
   req: Request,
-  provider: IdentityProvider = getIdentityProvider(),
+  providedOverride?: IdentityProvider,
 ): Promise<RequireAccountIdResult> {
   let accountId: string | null;
   try {
+    // Resolve inside try: getIdentityProvider() may throw `auth_config_invalid`
+    // in prod; without this the default-arg eval escapes the catch and the
+    // route crashes with a default Next 500 (no SECURITY_HEADERS).
+    const provider = providedOverride ?? getIdentityProvider();
     accountId = await provider.resolveAccountId(req);
-  } catch {
-    // Infra failure inside the provider (e.g. session store unreachable). We
-    // intentionally swallow the cause here; the provider itself should log.
+  } catch (err) {
+    console.error(
+      JSON.stringify({
+        level: "error",
+        event: "auth.require.provider_threw",
+        message: err instanceof Error ? err.message : "unknown",
+      }),
+    );
     return { ok: false, response: genericError(500, "internal") };
   }
 

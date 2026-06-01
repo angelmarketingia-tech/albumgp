@@ -109,6 +109,66 @@ function sampleWeighted(
 }
 
 /**
+ * Variant of `sampleWeighted` that also returns the chosen index so callers
+ * implementing draw-without-replacement can splice the entry out of the pool.
+ */
+function sampleWeightedIndex(
+  pool: VariablePoolEntry[],
+  rng: Rng,
+): { prize: Prize; index: number } | null {
+  if (!Array.isArray(pool) || pool.length === 0) {
+    return null;
+  }
+
+  let total = 0;
+  for (const entry of pool) {
+    if (
+      entry &&
+      typeof entry.weight === "number" &&
+      Number.isFinite(entry.weight) &&
+      entry.weight > 0
+    ) {
+      total += entry.weight;
+    }
+  }
+
+  if (total <= 0) {
+    return null;
+  }
+
+  const roll = rng() * total;
+  let cumulative = 0;
+  for (let i = 0; i < pool.length; i++) {
+    const entry = pool[i];
+    if (
+      !entry ||
+      typeof entry.weight !== "number" ||
+      !Number.isFinite(entry.weight) ||
+      entry.weight <= 0
+    ) {
+      continue;
+    }
+    cumulative += entry.weight;
+    if (roll < cumulative) {
+      return { prize: entry.prize, index: i };
+    }
+  }
+
+  for (let i = pool.length - 1; i >= 0; i--) {
+    const entry = pool[i];
+    if (
+      entry &&
+      typeof entry.weight === "number" &&
+      Number.isFinite(entry.weight) &&
+      entry.weight > 0
+    ) {
+      return { prize: entry.prize, index: i };
+    }
+  }
+  return null;
+}
+
+/**
  * Resolve a `PackResult` from a `PrizeSetData`.
  *
  * - Guaranteed slice is copied as-is (order preserved).
@@ -129,13 +189,29 @@ export function resolvePack(
     Number.isInteger(prizeSet.cards_per_pack) && prizeSet.cards_per_pack > 0
       ? prizeSet.cards_per_pack
       : guaranteed.length;
+  if (guaranteed.length > cardsPerPack) { throw new Error('[resolve] guaranteed.length (' + guaranteed.length + ') exceeds cards_per_pack (' + cardsPerPack + ')'); }
   const variableSlots = Math.max(0, cardsPerPack - guaranteed.length);
 
   const pool = Array.isArray(prizeSet.variable_pool) ? prizeSet.variable_pool : [];
+  // Sample WITHOUT replacement so a single pack never shows two visibly
+  // identical cards (UX issue: live Diamante reveal duplicated 'Defensor de
+  // hierro'). Each draw still respects the weighted distribution among the
+  // remaining entries. If the caller asks for more slots than pool entries we
+  // overflow back into a fresh copy of the pool (with replacement) so we never
+  // silently truncate the variable slice.
+  let remaining: VariablePoolEntry[] = [...pool];
   const variable: Prize[] = [];
   for (let i = 0; i < variableSlots; i++) {
-    const sampled = sampleWeighted(pool, rng);
-    variable.push(sampled ?? NONE_CARD);
+    if (remaining.length === 0) {
+      remaining = [...pool];
+    }
+    const sampled = sampleWeightedIndex(remaining, rng);
+    if (sampled === null) {
+      variable.push(NONE_CARD);
+      continue;
+    }
+    variable.push(sampled.prize);
+    remaining.splice(sampled.index, 1);
   }
 
   const result: PackResult = {

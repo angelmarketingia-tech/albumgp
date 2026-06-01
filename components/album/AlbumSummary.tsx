@@ -23,9 +23,15 @@ interface Cell {
 }
 
 function SummaryCell({ value, label }: Cell): JSX.Element {
+  // Dim zero values to communicate emptiness; drop gradient text (poor contrast on glass).
+  const isZero = value === 0;
   return (
-    <div className="flex flex-col items-center justify-center gap-1 rounded border border-white/20 bg-white/5 px-2 py-4 text-center">
-      <span className="font-display text-3xl font-bold leading-none text-white">
+    <div
+      className={`flex flex-col items-center justify-center gap-2 rounded-2xl border border-white/15 bg-white/8 backdrop-blur-xl px-3 py-5 text-center shadow-glass transition-transform hover:scale-[1.02] ${isZero ? "opacity-50" : ""}`}
+    >
+      <span
+        className={`font-display text-4xl font-black leading-none ${isZero ? "text-white/40" : "text-white"}`}
+      >
         {value}
       </span>
       <span className="font-sans text-[10px] uppercase tracking-wider text-white/70">
@@ -42,17 +48,17 @@ export function AlbumSummary({
   empty,
 }: AlbumSummaryProps): JSX.Element {
   const cells: Cell[] = [
-    { value: total_cards, label: "Cartas totales" },
     { value: real_prizes, label: "Premios reales" },
     { value: unique_collectibles, label: "Coleccionables" },
-    { value: empty, label: "Sin premio" },
+    { value: total_cards, label: "Cartas en total" },
+    { value: empty, label: "Slots vacíos" },
   ];
 
   return (
     <section
       aria-label="Resumen del álbum"
       data-album-summary
-      className="grid grid-cols-2 gap-2 md:grid-cols-4"
+      className="grid grid-cols-2 gap-3 md:grid-cols-4"
     >
       {cells.map((c) => (
         <SummaryCell key={c.label} value={c.value} label={c.label} />

@@ -10,7 +10,32 @@
 //     aria-labels, and the minimal `<div>` placeholders rendered before the
 //     design team's rich card components land.
 
-import type { Prize } from "@/lib/prizes/types";
+import type { Currency, Prize } from "@/lib/prizes/types";
+
+// Locale por moneda — fuerza el símbolo regional ("US$", "Q") sin depender
+// del locale del runtime.
+const LOCALE_BY_CURRENCY: Record<Currency, string> = {
+  USD: "es-SV",
+  GTQ: "es-GT",
+};
+
+/**
+ * Formato monetario localizado: `US$10` para enteros, `Q100.00` con dos
+ * decimales en caso contrario. Devuelve `''` ante valores no finitos para
+ * que la UI no tenga que filtrar `NaN`/`Infinity`.
+ */
+export function formatMoney(amount: number, currency: Currency): string {
+  if (typeof amount !== "number" || !Number.isFinite(amount)) {
+    return "";
+  }
+  return new Intl.NumberFormat(LOCALE_BY_CURRENCY[currency], {
+    style: "currency",
+    currency,
+    currencyDisplay: "symbol",
+    minimumFractionDigits: Number.isInteger(amount) ? 0 : 2,
+    maximumFractionDigits: 2,
+  }).format(amount);
+}
 
 /**
  * Insert a single space every 4 characters so a 16-char code reads as
@@ -60,12 +85,10 @@ export function formatRedeemedAt(iso: string, locale: string = "es"): string {
 export function prizeShortDescription(prize: Prize): string {
   switch (prize.type) {
     case "sports_credit": {
-      // Prefer the explicit `label` when present, otherwise fall back to the
-      // canonical "$X CCC" form so the caller always has something to render.
       if (prize.label.length > 0) {
         return prize.label;
       }
-      return `${prize.amount} ${prize.currency}`;
+      return formatMoney(prize.amount, prize.currency);
     }
     case "casino_spins": {
       if (prize.label.length > 0) {
@@ -95,6 +118,62 @@ export function prizeShortDescription(prize: Prize): string {
     default: {
       // Exhaustiveness guard. If a new PrizeType is added without updating
       // this switch, TypeScript flags it; at runtime we degrade gracefully.
+      const _exhaustive: never = prize;
+      void _exhaustive;
+      return "Premio";
+    }
+  }
+}
+
+/**
+ * Frase en español para lectores de pantalla. Más natural que
+ * `prizeShortDescription` (que prioriza brevedad visual) — pensada para
+ * `aria-label` en cartas, sobres y tarjetas del álbum.
+ */
+export function formatPrizeForA11y(prize: Prize): string {
+  switch (prize.type) {
+    case "collectible": {
+      return `Coleccionable ${rarityLabel(prize.rarity)} ${prize.label}`;
+    }
+    case "sports_credit": {
+      return `Apuesta gratis de ${formatMoney(prize.amount, prize.currency)}`;
+    }
+    case "casino_spins": {
+      return `${prize.count} giros gratis`;
+    }
+    case "deposit_match": {
+      return `Bono de depósito de ${prize.multiplier} veces`;
+    }
+    case "external_code": {
+      return `Código premio ${prize.label}`;
+    }
+    case "physical": {
+      // Etiqueta amigable por categoría; el `label` libre del premio queda
+      // como respaldo cuando la categoría es genérica.
+      switch (prize.category) {
+        case "cinema_combo":
+          return "Combo de cine";
+        case "jersey_local":
+          return "Camiseta oficial";
+        case "jersey_intl":
+          return "Camiseta internacional";
+        case "selecta_merch":
+          return "Producto oficial de La Selecta";
+        case "motorcycle":
+          return "Moto";
+        case "other":
+          return prize.label;
+        default: {
+          const _exhaustive: never = prize.category;
+          void _exhaustive;
+          return prize.label;
+        }
+      }
+    }
+    case "none": {
+      return "Sigue intentando";
+    }
+    default: {
       const _exhaustive: never = prize;
       void _exhaustive;
       return "Premio";

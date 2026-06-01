@@ -24,6 +24,12 @@ import { Redis } from "@upstash/redis";
  * Si necesitas más adelante, amplíala explícitamente — no exponer todo
  * `@upstash/redis` para mantener la superficie auditable.
  */
+export interface RedisPipelineLike {
+  incr(key: string): this;
+  expire(key: string, seconds: number): this;
+  exec(): Promise<unknown[]>;
+}
+
 export interface RedisLike {
   get(key: string): Promise<string | null>;
   set(
@@ -33,6 +39,8 @@ export interface RedisLike {
   ): Promise<"OK" | null>;
   incr(key: string): Promise<number>;
   expire(key: string, seconds: number): Promise<number>;
+  /** Optional: real Upstash client exposes this; the in-memory fallback does not. */
+  pipeline?(): RedisPipelineLike;
 }
 
 /* -------------------------------------------------------------------------- */
@@ -147,6 +155,9 @@ function buildClient(): RedisLike {
       async expire(key, seconds) {
         const res = await upstash.expire(key, seconds);
         return res;
+      },
+      pipeline() {
+        return upstash.pipeline() as unknown as RedisPipelineLike;
       },
     };
     return adapter;

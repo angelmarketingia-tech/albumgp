@@ -4,10 +4,7 @@
 
 :root {
   --gp-green-core: #008745;
-  --gp-green: #01783E;
-  --gp-green-deep: #00602F;
   --gp-white: #FFFFFF;
-  --gp-gold: #FFD600;
 }
 
 html,
@@ -17,7 +14,109 @@ body {
 
 body {
   color: var(--gp-white);
-  font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI",
-    Roboto, "Helvetica Neue", Arial, sans-serif;
-  /* TODO: depende de [CONFIRMAR_TIPOGRAFIA_OFICIAL] (Manual de Marca). */
+  font-family: var(--font-gp-sans), system-ui, sans-serif;
+  background-color: #001F0C;
+  font-feature-settings: 'ss01', 'cv11';
+}
+
+::selection {
+  background: #D4A017;
+  color: #034419;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+.text-display-balance {
+  text-wrap: balance;
+  line-height: 0.95;
+  letter-spacing: -0.02em;
+}
+
+@keyframes shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+
+.animate-shimmer {
+  background-size: 200% 100%;
+  animation: shimmer 3s linear infinite;
+}
+
+@keyframes envelope-breathe {
+  0%, 100% { transform: translateY(0) scale(1); filter: brightness(1); }
+  50% { transform: translateY(-6px) scale(1.02); filter: brightness(1.08); }
+}
+
+.animate-envelope-breathe {
+  animation: envelope-breathe 6s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+/* Staggered reveal delays for the pack cascade. Pre-defined classes
+   instead of inline style attrs to slash duplicated bytes from the
+   reveal HTML. Must stay in sync with T_REVEAL_BASE_MS + i *
+   REVEAL_STEP_MS in components/envelope/EnvelopeFlow.tsx. */
+.card-delay-0 { animation-delay: 100ms; }
+.card-delay-1 { animation-delay: 1200ms; }
+.card-delay-2 { animation-delay: 2300ms; }
+.card-delay-3 { animation-delay: 3400ms; }
+.card-delay-4 { animation-delay: 4500ms; }
+
+/* Card halo color by collectible rarity. The pulse keyframes live in
+   tailwind.config.ts (`animate-rarity-glow`); only the boxShadow color
+   depends on rarity, so we gate via [data-rarity] on the card root. */
+[data-card][data-rarity="rare"] > [data-card-glow] {
+  box-shadow: 0 0 40px 8px rgba(0, 120, 62, 0.5), 0 0 80px 16px rgba(0, 120, 62, 0.5);
+}
+[data-card][data-rarity="epic"] > [data-card-glow] {
+  box-shadow: 0 0 40px 8px rgba(168, 85, 247, 0.55), 0 0 80px 16px rgba(168, 85, 247, 0.55);
+}
+[data-card][data-rarity="legendary"] > [data-card-glow] {
+  box-shadow: 0 0 40px 8px rgba(212, 160, 23, 0.65), 0 0 80px 16px rgba(212, 160, 23, 0.65);
+}
+/* Only animate when actually revealed — avoids halo on dorso. */
+[data-card][data-revealed="false"] > [data-card-glow] {
+  display: none;
+}
+
+@keyframes confetti-burst {
+  0% {
+    opacity: 0;
+    transform: translate(0, 0) rotate(0) scale(0);
+  }
+  20% {
+    opacity: 1;
+    transform: translate(calc(var(--dx) * 0.3), calc(var(--dy) * 0.3))
+      rotate(calc(var(--rot) * 0.3)) scale(1);
+  }
+  100% {
+    opacity: 0;
+    transform: translate(var(--dx), var(--dy)) rotate(var(--rot)) scale(0.6);
+  }
+}
+
+.confetti-particle {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: var(--size);
+  height: var(--size);
+  background: currentColor;
+  border-radius: 1px;
+  animation: confetti-burst 1200ms ease-out forwards;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .confetti-particle {
+    animation: none;
+    opacity: 0;
+  }
 }

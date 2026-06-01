@@ -24,7 +24,7 @@ import { Card } from "@/components/cards/Card";
 import type { Prize } from "@/lib/prizes/types";
 
 describe("Card", () => {
-  it("renders sports_credit with amount, currency and label", () => {
+  it("renders sports_credit with formatted amount and label", () => {
     const prize: Prize = {
       type: "sports_credit",
       amount: 10,
@@ -32,8 +32,8 @@ describe("Card", () => {
       label: "Crédito deportivo",
     };
     render(<Card prize={prize} />);
-    expect(screen.getByText("10")).toBeInTheDocument();
-    expect(screen.getByText("USD")).toBeInTheDocument();
+    // Card renders the formatted money (e.g. "$10") and the label below it.
+    expect(screen.getByText(/\$\s?10/)).toBeInTheDocument();
     expect(screen.getByText("Crédito deportivo")).toBeInTheDocument();
   });
 
@@ -67,6 +67,7 @@ describe("Card", () => {
     const prize: Prize = {
       type: "physical",
       sku: "MUG-001",
+      category: "other",
       label: "Taza GanaPlay",
       redemption_instructions: "Retira en sucursal",
     };

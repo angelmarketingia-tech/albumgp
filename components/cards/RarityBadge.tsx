@@ -72,7 +72,7 @@ export function RarityBadge({ rarity }: RarityBadgeProps): JSX.Element {
       return (
         <span
           data-rarity="legendary"
-          className={`${BASE_CLS} bg-gp-gold-gradient text-gp-white shadow-md`}
+          className={`${BASE_CLS} bg-gp-gold-gradient text-gp-green-deep shadow-md`}
         >
           {label}
         </span>

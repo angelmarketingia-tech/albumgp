@@ -41,14 +41,36 @@ export interface RateLimitResult {
  * existe pero sin TTL (caso raro: server muere entre INCR e EXPIRE), el
  * próximo request normalizará — peor caso es una ventana extendida.
  */
+// Atomic INCR + conditional EXPIRE. We MUST NOT call EXPIRE on every hit:
+// doing so slides the TTL forward forever, so a client that keeps hammering
+// while rate-limited never sees the window reset. Matching the non-pipeline
+// branch's "only expire on count === 1" semantics, but server-side.
+// Exported so batched callers (see `with-rate-limit.ts`) can issue the same
+// atomic INCR+conditional-EXPIRE inside a single pipeline.
+export const INCR_EXPIRE_IF_NEW = "local v = redis.call('INCR', KEYS[1]); if v == 1 then redis.call('EXPIRE', KEYS[1], ARGV[1]) end; return v";
+
+// Narrow structural view of an Upstash-like client that exposes EVAL. We
+// don't widen RedisLike itself to keep its surface auditable; this cast is
+// local to the rate-limit hot path.
+interface RedisWithEval {
+  eval(script: string, keys: string[], args: string[]): Promise<unknown>;
+}
+
 export async function rateLimit(
   opts: RateLimitOptions,
   redis: RedisLike = getRedis(),
 ): Promise<RateLimitResult> {
   const { key, max, windowSeconds } = opts;
-  const count = await redis.incr(key);
-  if (count === 1) {
-    await redis.expire(key, windowSeconds);
+  let count: number;
+  const maybeEval = (redis as Partial<RedisWithEval>).eval;
+  if (typeof maybeEval === "function") {
+    const res = await maybeEval.call(redis, INCR_EXPIRE_IF_NEW, [key], [String(windowSeconds)]);
+    count = typeof res === "number" ? res : Number(res);
+  } else {
+    count = await redis.incr(key);
+    if (count === 1) {
+      await redis.expire(key, windowSeconds);
+    }
   }
   const allowed = count <= max;
   const remaining = Math.max(0, max - count);
@@ -61,26 +83,92 @@ export async function rateLimit(
 /* -------------------------------------------------------------------------- */
 
 /**
- * Extrae la IP del cliente del header `x-forwarded-for`, devolviéndola
- * saneada o `'unknown'` si no es válida.
+ * Extrae la IP del cliente, devolviéndola saneada o un bucket UA-hash si no
+ * es válida / no podemos confiar en el header.
  *
- * Vercel pone la IP real del cliente como primer elemento de la cadena
- * (`client, proxy1, proxy2`). Tomamos sólo la primera, recortada y sanitizada
- * para evitar caracteres raros que pudieran inyectarse en una key.
- *
- * Sanitización: sólo se permiten `0-9`, `a-f`, `A-F`, `.` , `:`. Cualquier
- * otra cosa se descarta y caemos a `'unknown'`.
- *
- * TODO(seguridad/prod): En Vercel también está disponible `request.ip` en
- * middleware Edge. Considerar usar eso cuando estemos en Edge runtime para
- * evitar spoofing de `x-forwarded-for` cuando la app corra detrás de un
- * proxy adicional. Hoy en serverless functions el header es confiable.
+ * Por qué la cautela con XFF: cualquier cliente puede enviarlo. Si lo
+ * honramos a ciegas fuera de Vercel, un atacante rota el primer hop y evita
+ * por completo el rate-limit. Política:
+ *   1. En Vercel: confiamos en `x-vercel-forwarded-for` (Vercel lo inyecta
+ *      y desecha cualquier valor del cliente). Este header sí pone al
+ *      cliente como PRIMER hop.
+ *   2. Fuera de Vercel: leemos primero la IP del peer (socket). Sólo si el
+ *      peer está en la allowlist `TRUSTED_PROXY_CIDRS` consultamos XFF /
+ *      x-real-ip, y en ese caso tomamos el ÚLTIMO hop (el que añadió
+ *      nuestro proxy de confianza) — no el primero, que es client-supplied.
+ *   3. Si nada de lo anterior produce una IP válida, caemos a un bucket
+ *      derivado de UA + Accept-Language (estable per-client; evita que
+ *      todos los anónimos compartan un literal "unknown" y se bloqueen
+ *      mutuamente).
  */
 export function extractClientIp(req: Request): string {
-  const xff = req.headers.get("x-forwarded-for") ?? "";
-  const first = xff.split(",")[0]?.trim() ?? "";
-  const sanitized = /^[0-9a-fA-F.:]+$/.test(first) ? first : "";
-  return sanitized || "unknown";
+  const isVercel = !!process.env.VERCEL;
+
+  let candidate = "";
+  if (isVercel) {
+    // Vercel-injected header: client is the first entry. `request.ip` is
+    // surfaced here too by the runtime — preferring the header keeps this
+    // pure-Request based and testable.
+    const vxff = req.headers.get("x-vercel-forwarded-for") ?? "";
+    const first = vxff.split(",")[0] ?? "";
+    candidate = first.trim();
+  } else {
+    // Peer/socket IP — set by the platform on the Request (Node adapter),
+    // not spoofable by the client. May not exist in plain `Request`.
+    const peer = readPeerIp(req);
+    if (peer && isTrustedProxy(peer)) {
+      // Trusted upstream: honor the chain but read from the END so we get
+      // the address our own proxy observed, not whatever the client typed.
+      const xff = req.headers.get("x-forwarded-for") ?? "";
+      const hops = xff.split(",").map((s) => s.trim()).filter(Boolean);
+      const lastHop = hops.length > 0 ? hops[hops.length - 1] ?? "" : "";
+      candidate = lastHop || (req.headers.get("x-real-ip") ?? "").trim() || peer;
+    } else if (peer) {
+      candidate = peer;
+    }
+  }
+
+  // Strip IPv6 brackets first, then any trailing :port (IPv4 only — bracketless
+  // IPv6 has colons everywhere, so we don't touch it).
+  const debracketed = candidate.replace(/^\[|\]$/g, "");
+  const stripped = debracketed.includes(":") && !debracketed.includes(".")
+    ? debracketed
+    : debracketed.replace(/:\d+$/, "");
+  const sanitized = /^[0-9a-fA-F.:]+$/.test(stripped) ? stripped : "";
+  if (sanitized) return sanitized;
+  // Stable per-client fallback so a single bad actor without a usable IP
+  // header doesn't share one bucket with everyone else under literal 'unknown'.
+  const ua = req.headers.get("user-agent") ?? "";
+  const al = req.headers.get("accept-language") ?? "";
+  const hash = createHash("sha256").update(`${ua}\n${al}`, "utf8").digest("hex");
+  return `ua:${hash}`;
+}
+
+// `Request` doesn't expose the peer socket address in the standard spec,
+// but Node/Next adapters often attach it (e.g. `req.ip`, or via a symbol).
+// We read it defensively without widening types globally.
+function readPeerIp(req: Request): string {
+  const anyReq = req as unknown as { ip?: unknown; socket?: { remoteAddress?: unknown } };
+  if (typeof anyReq.ip === "string" && anyReq.ip.length > 0) return anyReq.ip;
+  const remote = anyReq.socket?.remoteAddress;
+  return typeof remote === "string" ? remote : "";
+}
+
+// Allowlist of upstream proxies whose XFF we accept. CIDR strings are kept
+// as exact-prefix matches (string-startsWith on the network portion) — full
+// CIDR math would require a parser we don't want to pull in. Operators are
+// expected to list the proxy's exact IP or a short, unambiguous prefix.
+function isTrustedProxy(peer: string): boolean {
+  const raw = process.env.TRUSTED_PROXY_CIDRS ?? "";
+  if (!raw) return false;
+  const entries = raw.split(",").map((s) => s.trim()).filter(Boolean);
+  for (const entry of entries) {
+    if (peer === entry) return true;
+    const slash = entry.indexOf("/");
+    const network = slash >= 0 ? entry.slice(0, slash) : entry;
+    if (network && peer.startsWith(network)) return true;
+  }
+  return false;
 }
 
 /**

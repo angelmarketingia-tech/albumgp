@@ -12,8 +12,16 @@
  */
 
 import { NextResponse } from "next/server";
-import { rateLimit, type RateLimitResult } from "../redis/rate-limit";
+import { getRedis, type RedisPipelineLike } from "../redis/client";
+import { INCR_EXPIRE_IF_NEW, rateLimit } from "../redis/rate-limit";
 import { genericError } from "./response";
+
+// Structural view of a pipeline that also supports EVAL — Upstash exposes it,
+// but our `RedisPipelineLike` interface intentionally stays narrow. Local cast
+// keeps the wider surface confined to this hot path.
+interface PipelineWithEval extends RedisPipelineLike {
+  eval(script: string, keys: string[], args: string[]): this;
+}
 
 export interface RateLimitRule {
   key: string;
@@ -47,10 +55,33 @@ export function withRateLimit<TCtx>(
 ): Handler<TCtx> {
   return async (req, ctx) => {
     const rules = await rulesBuilder(req, ctx);
-    for (const rule of rules) {
-      const result: RateLimitResult = await rateLimit(rule);
-      if (!result.allowed) {
-        return genericError(429, "rate_limited");
+    if (rules.length > 0) {
+      // Batch all INCR+EXPIRE pairs in one round-trip when the client supports
+      // pipelining + EVAL. Falls back to serial only for the in-memory dev
+      // adapter (no pipeline()), which is local and cheap anyway.
+      const redis = getRedis();
+      const pipeFactory = redis.pipeline?.bind(redis);
+      const pipe = pipeFactory ? (pipeFactory() as PipelineWithEval) : null;
+      if (pipe && typeof pipe.eval === "function") {
+        for (const rule of rules) {
+          pipe.eval(INCR_EXPIRE_IF_NEW, [rule.key], [String(rule.windowSeconds)]);
+        }
+        const results = await pipe.exec();
+        for (let i = 0; i < rules.length; i++) {
+          const rule = rules[i]!;
+          const raw = results[i];
+          const count = typeof raw === "number" ? raw : Number(raw);
+          if (!(count <= rule.max)) {
+            return genericError(429, "rate_limited");
+          }
+        }
+      } else {
+        for (const rule of rules) {
+          const result = await rateLimit(rule, redis);
+          if (!result.allowed) {
+            return genericError(429, "rate_limited");
+          }
+        }
       }
     }
     return handler(req, ctx);

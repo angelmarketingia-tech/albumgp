@@ -6,27 +6,27 @@
 //
 // Estrategia:
 //   - `auth()` para chequear sesión. Sin sesión → redirect a /auth/signin.
-//   - Fetch a `/api/album`. El endpoint ya existe (otro agente lo construyó).
-//   - Si por alguna razón el endpoint falla / no parsea → empty state. NO
-//     rompemos la página: el agente backend puede no haber desplegado todavía
-//     en el flujo de dev, o puede haber un error transitorio.
+//   - Lectura directa de la query de álbum (sin hop HTTP a /api/album): el RSC
+//     ya corre en el mismo proceso, así evitamos un fetch + cookie-forwarding
+//     innecesarios y cualquier flake de red en dev.
+//   - Si la query falla por cualquier motivo → empty state. NO rompemos la
+//     página; una falla de DB transitoria no debería darle un stack al usuario.
 //   - Vista de colección agrupada por rareza + contadores visuales
 //     (`<AlbumSummary>`) + repisas (`<RarityShelf>`) + historial de premios
 //     reales reclamados (sin coleccionables ni "none").
-//   - Las cartas usan `<Card size="sm">` (128x192) — placeholder div fue
-//     reemplazado por el componente rico.
 
+import Image from "next/image";
 import Link from "next/link";
-import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import type { JSX } from "react";
 
-import { Logo } from "@/components/brand/Logo";
 import { Card } from "@/components/cards/Card";
 import { AlbumSummary } from "@/components/album/AlbumSummary";
 import { RarityShelf } from "@/components/album/RarityShelf";
 import { auth } from "@/lib/auth/auth-config";
+import { prisma } from "@/lib/db/client";
 import { LEGAL_NOTICES } from "@/lib/brand/constants";
+import { getAlbumForAccount } from "@/lib/album";
 import { groupAlbumByRarity, categorizePrize } from "@/lib/album/group";
 import type {
   AlbumRedemption,
@@ -40,45 +40,9 @@ interface SearchParams {
   just_redeemed?: string | string[];
 }
 
-function selfUrl(pathname: string): string {
-  const h = headers();
-  const host = h.get("host") ?? "localhost:3000";
-  const proto = h.get("x-forwarded-proto") ?? "http";
-  return `${proto}://${host}${pathname}`;
-}
-
-/**
- * Best-effort fetch + parse of `/api/album`. We forward the incoming
- * Cookie header so the API sees the same session as this RSC.
- *
- * Returns `null` on ANY failure — the caller renders an empty state rather
- * than a stack trace.
- */
-async function fetchAlbum(): Promise<AlbumResponse | null> {
-  const h = headers();
-  const cookie = h.get("cookie") ?? "";
-  try {
-    const res = await fetch(selfUrl("/api/album"), {
-      method: "GET",
-      headers: cookie.length > 0 ? { cookie } : {},
-      cache: "no-store",
-    });
-    if (!res.ok) {
-      return null;
-    }
-    const body = (await res.json()) as unknown;
-    if (
-      body === null ||
-      typeof body !== "object" ||
-      !Array.isArray((body as { redemptions?: unknown }).redemptions)
-    ) {
-      return null;
-    }
-    return body as AlbumResponse;
-  } catch {
-    return null;
-  }
-}
+// Total de coleccionables en circulación. Mientras no haya un endpoint que lo
+// devuelva, lo derivamos de los assets en /public/assets/cartas (6 cartas).
+const TOTAL_COLLECTIBLES = 6;
 
 // ---------- Render helpers ---------------------------------------------------
 
@@ -124,17 +88,17 @@ function RealPrizesRedemptionBlock({
 
 function EmptyState(): JSX.Element {
   return (
-    <section className="flex flex-col items-center gap-4 rounded border border-white/20 bg-white/5 p-8 text-center">
-      <p className="text-base text-white">Tu álbum está vacío</p>
-      <p className="text-sm text-white/70">
-        Cuando canjees un código, las cartas aparecerán acá.
-      </p>
-      <Link
-        href="/"
-        className="rounded bg-gp-gold px-4 py-2 text-sm font-semibold text-gp-gray-dark-2"
-      >
-        Abrir un sobre
-      </Link>
+    <section className="flex flex-col items-center gap-4 rounded-2xl border border-white/15 bg-white/5 p-8 text-center shadow-glass">
+      <Image
+        src="/assets/marketing/empty-album.webp"
+        alt=""
+        width={560}
+        height={420}
+        className="h-auto w-full max-w-xs"
+      />
+      <p className="font-display text-xl font-bold text-white">Tu álbum te está esperando</p>
+      <p className="text-sm text-white/85">Cada sobre que abrás te suma cartas acá. Empezá con tu primer código.</p>
+      <Link href="/" className="inline-flex items-center gap-2 rounded-full bg-[linear-gradient(135deg,#B8860B,#D4A017,#F4D03F)] px-6 py-3 font-sans text-sm font-black uppercase tracking-wide text-gp-green-deep shadow-gold-glow active:scale-[0.97] transition-transform focus:outline-none focus-visible:ring-4 focus-visible:ring-gp-white focus-visible:ring-offset-2 focus-visible:ring-offset-gp-green-deep">Abrir mi primer sobre</Link>
     </section>
   );
 }
@@ -151,7 +115,13 @@ export default async function AlbumPage({
     redirect("/auth/signin?callbackUrl=/album");
   }
 
-  const album = await fetchAlbum();
+  let album: AlbumResponse | null = null;
+  try {
+    album = await getAlbumForAccount(prisma, session.user.id);
+  } catch {
+    album = null;
+  }
+
   const justRedeemed = searchParams.just_redeemed === "1";
 
   const view =
@@ -171,19 +141,65 @@ export default async function AlbumPage({
         )
       : [];
 
+  // Session callback scrubs name to ''. '' is truthy for ?? so use ||.
+  const firstName =
+    session.user.name?.trim().split(" ")[0] || "Coleccionista";
+  const uniqueCount = view?.unique_collectibles ?? 0;
+  // Cap a 100% para evitar overflow visual si un día hay más coleccionables
+  // que el total esperado (ej. expansión sin actualizar `TOTAL_COLLECTIBLES`).
+  const progressPct = Math.min(
+    100,
+    Math.round((uniqueCount / TOTAL_COLLECTIBLES) * 100),
+  );
+
   return (
-    <main className="mx-auto flex min-h-screen max-w-3xl flex-col gap-6 px-5 pb-8 pt-8">
-      <header className="flex flex-col items-center gap-3 text-center">
-        <Logo variant="blanco" width={140} />
-        <h1 className="font-display text-2xl font-bold text-white">
-          Mi álbum
-        </h1>
-      </header>
+    <main id="main-content" className="mx-auto flex min-h-screen max-w-3xl flex-col gap-6 px-5 pb-8 pt-8">
+      <section
+        aria-label="Resumen del coleccionista"
+        className="relative -mx-5 -mt-8 mb-6 h-56 overflow-hidden rounded-b-3xl"
+      >
+        {/* Panoramic hero illustration; alt empty because all label/heading
+            content is rendered as real text overlay below for SR + SEO. */}
+        <Image
+          src="/assets/marketing/album-hero.webp"
+          alt=""
+          fill
+          priority
+          sizes="(max-width: 768px) 100vw, 768px"
+          className="object-cover"
+        />
+        {/* Bottom-up scrim keeps the overlay text legible on any photo. */}
+        <div
+          aria-hidden
+          className="absolute inset-0 bg-gradient-to-t from-gp-green-deep via-gp-green-deep/40 to-transparent"
+        />
+        <div className="relative z-10 flex h-full flex-col justify-end gap-3 px-6 pb-6 pt-8">
+          <p className="font-sans text-[10px] uppercase tracking-[0.4em] text-gp-gold/80">
+            MI COLECCIÓN
+          </p>
+          <h1 className="font-display text-3xl font-bold text-white sm:text-4xl">
+            Hola, {firstName}
+          </h1>
+          <div
+            role="progressbar"
+            aria-valuenow={progressPct}
+            aria-valuemin={0}
+            aria-valuemax={100}
+            aria-label={`Progreso: ${String(uniqueCount)} de ${String(TOTAL_COLLECTIBLES)} coleccionables`}
+            className="h-2 w-full rounded-full bg-white/10"
+          >
+            <div
+              className="h-full rounded-full bg-gradient-to-r from-emerald-400 to-gp-gold transition-all"
+              style={{ width: `${String(progressPct)}%` }}
+            />
+          </div>
+        </div>
+      </section>
 
       {justRedeemed ? (
         <div
           role="status"
-          className="rounded border border-gp-gold/60 bg-gp-gold/10 p-3 text-center text-sm text-gp-gold"
+          className="rounded border border-gp-gold bg-gp-green-deep/80 p-3 text-center text-sm font-bold text-gp-gold"
         >
           ¡Premios acreditados!
         </div>
@@ -241,17 +257,18 @@ export default async function AlbumPage({
         </>
       )}
 
-      <Link
-        href="/"
-        className="rounded border border-white/40 px-4 py-3 text-center text-sm text-white/90"
-      >
-        Abrir otro sobre
-      </Link>
-
-      <footer className="mt-auto pt-6 text-center text-xs text-white/70">
+      <footer className="mt-auto pt-6 text-center text-xs text-white/85">
         <p>{LEGAL_NOTICES.ageGate}</p>
         <p className="mt-1">{LEGAL_NOTICES.responsibleGaming}</p>
       </footer>
+
+      <Link
+        href="/"
+        aria-label="Abrir otro sobre"
+        className="fixed bottom-6 right-6 z-30 inline-flex items-center gap-2 rounded-full bg-[linear-gradient(135deg,#B8860B,#D4A017,#F4D03F)] px-6 py-3 font-sans font-black uppercase tracking-wide text-gp-green-deep shadow-gold-glow active:scale-[0.97] transition-transform focus:outline-none focus-visible:ring-4 focus-visible:ring-gp-white focus-visible:ring-offset-2 focus-visible:ring-offset-gp-green-deep"
+      >
+        Abrir otro sobre
+      </Link>
     </main>
   );
 }

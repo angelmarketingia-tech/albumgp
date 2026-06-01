@@ -10,19 +10,29 @@ export type {
   CasinoSpinsPrize,
   DepositMatchPrize,
   PhysicalPrize,
+  PhysicalCategory,
   ExternalCodePrize,
   CollectiblePrize,
   NonePrize,
   VariablePoolEntry,
   PackResult,
+  EnvelopeTier,
 } from "./types";
-export { PACK_VERSION_CURRENT } from "./types";
+export { PACK_VERSION_CURRENT, ENVELOPE_TIERS } from "./types";
 
 export {
   prizeSchema,
   variablePoolEntrySchema,
   packResultSchema,
+  envelopeTierSchema,
 } from "./schemas";
+
+export {
+  TIER_THEME,
+  formatTier,
+  tierFromValue,
+  type TierTheme,
+} from "./tiers";
 
 export {
   resolvePack,

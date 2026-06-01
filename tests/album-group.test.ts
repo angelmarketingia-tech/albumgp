@@ -54,6 +54,7 @@ const MATCH: Prize = {
 const PHYSICAL: Prize = {
   type: "physical",
   sku: "MUG-001",
+  category: "other",
   label: "Taza GanaPlay",
   redemption_instructions: "Retirar en oficinas",
 };

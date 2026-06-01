@@ -1,11 +1,9 @@
-"use client";
-
 import Image from "next/image";
-import { motion } from "framer-motion";
 import type { JSX } from "react";
 
 import type { Prize, CollectiblePrize } from "@/lib/prizes/types";
 import { BRAND_NAME } from "@/lib/brand/constants";
+import { formatMoney } from "@/lib/ui/format";
 
 import { PrizeIcon } from "./PrizeIcon";
 import { RarityBadge } from "./RarityBadge";
@@ -33,21 +31,13 @@ function isFancyRarity(prize: Prize): prize is CollectiblePrize {
 }
 
 /**
- * Carta primitiva del sobre. Renderiza el premio según su `type` del
- * discriminated union `Prize` (ver lib/prizes/types.ts).
+ * Carta primitiva del sobre. Server component: el flip 3D, halo pulsante y
+ * hover se hacen 100% con Tailwind/CSS para evitar hidratar framer-motion
+ * por cada carta. Confetti sigue siendo su propio client island.
  *
- * Diseño:
- *  - Aspect ratio 2:3 fijo (igual que el ratio definido en AGENTS.md §9).
- *  - 3 tamaños (sm 128x192, md 192x288, lg 256x384).
- *  - Borde verde por default; gradiente dorado para coleccionables
- *    epic / legendary.
- *  - Reveal con flip 3D (rotateY 180 -> 0, 500ms) cuando `revealed=true`,
- *    respetando `delay` (en ms). Si `revealed=false`, muestra dorso verde
- *    con isotipo blanco.
- *  - Hover (md/lg) escala 1.02 (whileHover de motion.div).
- *
- * NO contiene lógica de fetch ni de estado de pack — eso vive en
- * `PackReveal` y en el contenedor de página (Frontend Ola 2).
+ * Reveal: el contenedor expone `data-revealed` y `data-rarity`; las reglas
+ * en globals.css gating con `[data-rarity='epic'|'legendary'|'rare']`
+ * disparan `animate-rarity-glow` (definido en tailwind.config.ts).
  */
 
 export type CardSize = "sm" | "md" | "lg";
@@ -59,12 +49,27 @@ export interface CardProps {
   /** Retraso del flip-in en milisegundos. Default `0`. */
   delay?: number;
   size?: CardSize;
+  /**
+   * Pasa-a-través a `<Image priority>`. Default `false`. Sólo la primera
+   * carta del reveal debe marcarse `true`; emitir múltiples preloads con
+   * fetchPriority=high junto a loading=lazy hace que el browser ignore la
+   * pista y desperdicia ancho de banda.
+   */
+  priority?: boolean;
 }
 
 const SIZE_CLS: Record<CardSize, string> = {
   sm: "w-32 h-48",
   md: "w-48 h-72",
   lg: "w-64 h-96",
+};
+
+// Pixel widths matched to SIZE_CLS — feeds <Image sizes> so Next picks the
+// right srcset bucket without downloading the full asset on small cards.
+const SIZE_PX: Record<CardSize, number> = {
+  sm: 128,
+  md: 192,
+  lg: 256,
 };
 
 const AMOUNT_TEXT_CLS: Record<CardSize, string> = {
@@ -79,19 +84,14 @@ const LABEL_TEXT_CLS: Record<CardSize, string> = {
   lg: "text-sm",
 };
 
-function isLegendaryOrEpic(prize: Prize): prize is CollectiblePrize {
-  return (
-    prize.type === "collectible" &&
-    (prize.rarity === "epic" || prize.rarity === "legendary")
-  );
-}
-
 function CardFrontContent({
   prize,
   size,
+  priority,
 }: {
   prize: Prize;
   size: CardSize;
+  priority: boolean;
 }): JSX.Element {
   switch (prize.type) {
     case "sports_credit":
@@ -104,12 +104,7 @@ function CardFrontContent({
           <p
             className={`font-display font-bold leading-none text-gp-green ${AMOUNT_TEXT_CLS[size]}`}
           >
-            {prize.amount}
-          </p>
-          <p
-            className={`font-sans font-bold uppercase tracking-wide text-gp-green ${LABEL_TEXT_CLS[size]}`}
-          >
-            {prize.currency}
+            {formatMoney(prize.amount, prize.currency)}
           </p>
           <p
             className={`font-sans text-gp-gray-dark-1 ${LABEL_TEXT_CLS[size]}`}
@@ -150,6 +145,7 @@ function CardFrontContent({
             className={`font-display font-bold leading-none text-gp-green ${AMOUNT_TEXT_CLS[size]}`}
           >
             {prize.multiplier}
+            <span className="sr-only"> veces </span>
             <span aria-hidden>×</span>
           </p>
           <p
@@ -164,10 +160,37 @@ function CardFrontContent({
           </p>
         </div>
       );
-    case "physical":
+    case "physical": {
+      // Glyph corto que ayuda al usuario a identificar la sub-categoría
+      // del premio físico sin leer el label completo. No reemplaza la
+      // ilustración final (Diseño la entregará en Fase 4 Ola 2-3).
+      const categoryGlyph = (() => {
+        switch (prize.category) {
+          case "cinema_combo": return "🎬";
+          case "jersey_local": return "👕";
+          case "jersey_intl": return "🏆";
+          case "selecta_merch": return "🇸🇻";
+          case "motorcycle": return "🏍️";
+          case "other": return null;
+          default: {
+            const _e: never = prize.category;
+            void _e;
+            return null;
+          }
+        }
+      })();
       return (
         <div className="flex h-full w-full flex-col items-center justify-center gap-2 p-3 text-center text-gp-gray-dark-2">
-          <PrizeIcon type="physical" className="h-10 w-10 text-gp-green" />
+          {categoryGlyph !== null ? (
+            <span
+              aria-hidden
+              className={size === "lg" ? "text-5xl" : size === "md" ? "text-4xl" : "text-3xl"}
+            >
+              {categoryGlyph}
+            </span>
+          ) : (
+            <PrizeIcon type="physical" className="h-10 w-10 text-gp-green" />
+          )}
           <p
             className={`font-sans font-bold uppercase tracking-wide text-gp-green ${LABEL_TEXT_CLS[size]}`}
           >
@@ -175,6 +198,7 @@ function CardFrontContent({
           </p>
         </div>
       );
+    }
     case "external_code":
       return (
         <div className="flex h-full w-full flex-col items-center justify-center gap-2 p-3 text-center text-gp-gray-dark-2">
@@ -196,27 +220,40 @@ function CardFrontContent({
       );
     case "collectible": {
       const imageUrl = prize.image_url;
+      if (imageUrl !== undefined) {
+        return (
+          <div className="relative h-full w-full overflow-hidden rounded-[7px]">
+            <Image
+              src={imageUrl}
+              alt={prize.label}
+              fill
+              sizes={`${SIZE_PX[size]}px`}
+              priority={priority}
+              className="object-cover"
+            />
+            {/* Bottom fade so label remains legible over any artwork */}
+            <div
+              aria-hidden
+              className="pointer-events-none absolute inset-x-0 bottom-0 h-2/3 bg-gradient-to-t from-black/85 via-black/40 to-transparent"
+            />
+            <div className="absolute left-2 top-2">
+              <RarityBadge rarity={prize.rarity} />
+            </div>
+            <p className="absolute bottom-3 left-3 right-3 text-sm font-bold text-white">
+              {prize.label}
+            </p>
+          </div>
+        );
+      }
       return (
         <div className="relative flex h-full w-full flex-col items-center justify-center gap-2 p-3 text-center text-gp-gray-dark-2">
-          <div className="absolute right-2 top-2">
+          <div className="absolute left-2 top-2">
             <RarityBadge rarity={prize.rarity} />
           </div>
-          {imageUrl !== undefined ? (
-            <div className="relative h-3/5 w-3/5">
-              <Image
-                src={imageUrl}
-                alt={prize.label}
-                fill
-                sizes="(max-width: 768px) 33vw, 192px"
-                className="object-contain"
-              />
-            </div>
-          ) : (
-            <PrizeIcon
-              type="collectible"
-              className="h-12 w-12 text-gp-green"
-            />
-          )}
+          <PrizeIcon
+            type="collectible"
+            className="h-12 w-12 text-gp-green"
+          />
           <p
             className={`font-sans font-bold uppercase tracking-wide text-gp-green ${LABEL_TEXT_CLS[size]}`}
           >
@@ -251,71 +288,69 @@ export function Card({
   revealed = true,
   delay = 0,
   size = "md",
+  priority = false,
 }: CardProps): JSX.Element {
   const sizeCls = SIZE_CLS[size];
   const isNone = prize.type === "none";
-  const isPremiumCollectible = isLegendaryOrEpic(prize);
   const fancy = isFancyRarity(prize);
   const showConfetti = revealed && isRealPrize(prize) && size !== "sm";
 
-  const borderCls = isPremiumCollectible
-    ? "border-2 border-transparent bg-gp-gold-gradient"
-    : "border border-gp-green";
+  // Per-tier framed border. Collectibles use a 2px gradient halo per rarity;
+  // everything else keeps the standard verde de marca outline.
+  const borderCls = (() => {
+    if (prize.type !== "collectible") return "border border-gp-green";
+    switch (prize.rarity) {
+      case "legendary":
+        return "bg-[linear-gradient(120deg,#B8860B_0%,#F4D03F_25%,#FFFFFF_50%,#F4D03F_75%,#B8860B_100%)] bg-[length:200%_100%] animate-shimmer p-[2px]";
+      case "epic":
+        return "bg-[conic-gradient(from_0deg,#7C3AED,#A78BFA,#7C3AED)] p-[2px]";
+      case "rare":
+        return "bg-gradient-to-br from-gp-green to-emerald-400 p-[2px]";
+      case "common":
+      default:
+        return "border border-gp-green";
+    }
+  })();
 
   const surfaceCls = isNone
     ? "bg-gp-gray-light/30"
     : "bg-gradient-to-b from-gp-white to-gp-gray-light/30";
 
-  const allowHover = size !== "sm";
-  const hoverProps = allowHover ? { whileHover: { scale: 1.02 } } : {};
+  // Hover-only zoom on md/lg — Tailwind handles it without JS.
+  const hoverCls = size !== "sm" ? "hover:scale-[1.02] transition-transform" : "";
 
   // Confetti se dispara justo cuando la cara delantera queda visible
   // (mitad de la animación de flip). 500ms flip -> dispara a +250ms del delay.
   const confettiDelay = delay + 250;
 
-  // Halo pulsante para colecciionables rare/epic/legendary. Color
-  // depende de la rareza para reforzar visualmente la jerarquia.
-  const glowColor = (() => {
-    if (!fancy) return null;
-    if (prize.rarity === "legendary") return "rgba(212, 160, 23, 0.65)";
-    if (prize.rarity === "epic") return "rgba(168, 85, 247, 0.55)";
-    return "rgba(0, 120, 62, 0.5)"; // rare → verde de marca
-  })();
+  // rarity-glow animation in globals.css gates on data-rarity + data-revealed.
+  const rarityAttr = prize.type === "collectible" ? prize.rarity : "none";
 
   return (
-    <motion.div
+    <div
       data-card
       data-prize-type={prize.type}
       data-revealed={revealed ? "true" : "false"}
-      className={`${sizeCls} relative rounded-lg shadow-lg [perspective:1000px]`}
-      {...hoverProps}
-      transition={{ type: "spring", stiffness: 300, damping: 24 }}
+      data-rarity={rarityAttr}
+      className={`${sizeCls} ${hoverCls} relative rounded-lg shadow-lg [perspective:1000px]`}
     >
-      {/* Halo pulsante para coleccionables raros */}
-      {glowColor !== null && revealed ? (
-        <motion.div
+      {/* Halo pulsante para coleccionables rare/epic/legendary — CSS only.
+          La regla en globals.css selecciona por data-rarity y aplica
+          animate-rarity-glow sólo cuando data-revealed='true'. */}
+      {fancy && revealed ? (
+        <div
           aria-hidden
-          className="pointer-events-none absolute -inset-2 rounded-2xl"
-          style={{
-            boxShadow: `0 0 40px 8px ${glowColor}, 0 0 80px 16px ${glowColor}`,
-          }}
-          initial={{ opacity: 0 }}
-          animate={{ opacity: [0, 0.85, 0.55, 0.85] }}
-          transition={{
-            delay: (delay + 400) / 1000,
-            duration: 2.4,
-            repeat: Infinity,
-            repeatType: "mirror",
-            ease: "easeInOut",
-          }}
+          data-card-glow
+          className="pointer-events-none absolute -inset-2 rounded-2xl animate-rarity-glow"
         />
       ) : null}
 
-      <motion.div
-        className="relative h-full w-full [transform-style:preserve-3d]"
-        initial={revealed ? { rotateY: 180 } : { rotateY: 0 }}
-        animate={revealed ? { rotateY: 0 } : { rotateY: 180 }}
-        transition={{ duration: 0.5, delay: delay / 1000 }}
+      <div
+        className="relative h-full w-full [transform-style:preserve-3d] transition-transform duration-500"
+        style={{
+          transform: revealed ? "rotateY(0deg)" : "rotateY(180deg)",
+          transitionDelay: `${delay}ms`,
+        }}
       >
         {/* Front face */}
         <div
@@ -325,7 +360,7 @@ export function Card({
           <div
             className={`flex h-full w-full flex-col rounded-[7px] ${surfaceCls}`}
           >
-            <CardFrontContent prize={prize} size={size} />
+            <CardFrontContent prize={prize} size={size} priority={priority} />
           </div>
         </div>
 
@@ -333,17 +368,31 @@ export function Card({
         <div
           data-face="back"
           aria-hidden={revealed ? true : undefined}
-          className="absolute inset-0 flex items-center justify-center rounded-lg border border-gp-green-deep bg-gp-radial [backface-visibility:hidden] [transform:rotateY(180deg)]"
+          className="absolute inset-0 flex flex-col items-center justify-center rounded-lg border border-gp-green-deep bg-gp-green-deep [backface-visibility:hidden] [transform:rotateY(180deg)]"
+          style={{
+            backgroundImage: "url('/assets/textures/card-back-pattern.webp')",
+            backgroundSize: "cover",
+            backgroundPosition: "center",
+          }}
         >
-          <span className="font-display text-lg font-bold uppercase tracking-widest text-gp-white">
-            {BRAND_NAME}
+          <div className="flex h-14 w-14 items-center justify-center rounded-full border-2 border-gp-gold">
+            <Image
+              src="/brand/logo/isotipo-white.svg"
+              alt={BRAND_NAME}
+              width={40}
+              height={40}
+              className="rounded-full"
+            />
+          </div>
+          <span className="absolute bottom-3 text-[8px] uppercase tracking-[0.3em] text-gp-gold/70">
+            Temporada 2026
           </span>
         </div>
-      </motion.div>
+      </div>
 
       {/* Confetti dorado al revelar premios reales (sobre la animacion de flip) */}
       {showConfetti ? <Confetti delay={confettiDelay} /> : null}
-    </motion.div>
+    </div>
   );
 }
 

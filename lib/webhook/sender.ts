@@ -141,6 +141,21 @@ export async function sendRedemptionWebhook(
 ): Promise<WebhookDeliveryResult> {
   const url = process.env.WEBHOOK_CENTRAL_URL ?? "";
   const secret = process.env.WEBHOOK_CENTRAL_SECRET ?? "";
+
+  // En producción la URL es obligatoria — un dry-run silencioso ahí esconde
+  // un misconfig grave (pagos sin notificar a central).
+  if (url.length === 0 && process.env.NODE_ENV === "production") {
+    logError("webhook.url_missing_prod", {
+      delivery_id: payload.delivery_id,
+      code_id: payload.code_id,
+    });
+    return {
+      status: "failed",
+      attempts: 0,
+      lastError: "webhook_url_missing_prod",
+    };
+  }
+
   const fetchImpl = opts.fetchImpl ?? fetch;
   const sleepImpl = opts.sleepImpl ?? defaultSleep;
   const nowImpl = opts.nowImpl ?? Date.now;
@@ -156,10 +171,27 @@ export async function sendRedemptionWebhook(
   try {
     signed = signWebhookPayload(body, secret, nowImpl());
   } catch {
-    // No leakeamos `err.message` (podría revelar que el secret está vacío).
-    // En dry-run sin secret continuamos; en envío real fallaríamos al armar
-    // los headers y caemos por el camino de error.
-    signed = null;
+    // Distinguimos secret-vacío (aceptable solo en true dry-run) de
+    // secret-presente-pero-débil (hard fail: nunca queremos firmar con un
+    // secret inseguro y mandarlo a la central).
+    if (secret.length > 0) {
+      logError("webhook.weak_secret", {
+        delivery_id: payload.delivery_id,
+        code_id: payload.code_id,
+      });
+      return {
+        status: "failed",
+        attempts: 0,
+        lastError: "webhook_weak_secret",
+      };
+    }
+    if (url.length > 0) {
+      // Secret vacío pero URL configurada — no es dry-run, no podemos firmar.
+      // No leakeamos err.message (revelaría el motivo exacto).
+      signed = null;
+    } else {
+      signed = null;
+    }
   }
 
   // --- DRY-RUN: URL vacía -------------------------------------------------

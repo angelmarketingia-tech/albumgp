@@ -140,9 +140,15 @@ interface MakeReqOpts {
   headers?: Record<string, string>;
 }
 
+// Simulate Vercel so `extractClientIp` honors `x-vercel-forwarded-for` (else
+// it falls back to a UA-hashed bucket and per-IP isolation tests collapse).
+process.env.VERCEL = "1";
+
 function makeReq(opts: MakeReqOpts = {}): Request {
+  const ip = opts.ip ?? "1.2.3.4";
   const headers: Record<string, string> = {
-    "x-forwarded-for": opts.ip ?? "1.2.3.4",
+    "x-forwarded-for": ip,
+    "x-vercel-forwarded-for": ip,
     ...(opts.headers ?? {}),
   };
   return new Request("http://x.test/api/album", {

@@ -121,24 +121,39 @@ interface MakeReqOpts {
   headers?: Record<string, string>;
 }
 
+// Simulate Vercel so `extractClientIp` honors `x-vercel-forwarded-for`. Outside
+// Vercel/trusted-proxy mode it falls back to a UA-hashed bucket, which would
+// collapse every test "IP" into a single bucket and break per-IP isolation.
+process.env.VERCEL = "1";
+
 function makeReq(opts: MakeReqOpts = {}): Request {
+  let bodyStr: string;
+  if (opts.rawBody !== undefined) {
+    bodyStr = opts.rawBody;
+  } else if (opts.body !== undefined) {
+    bodyStr = JSON.stringify(opts.body);
+  } else {
+    bodyStr = JSON.stringify({ code: VALID_CODE });
+  }
+  // Default to a same-origin POST (Origin matches Host) and an explicit
+  // Content-Length (route requires both: same-origin gate per SECURITY.md §2,
+  // and an explicit small Content-Length to cap body buffering). Vercel-style
+  // `x-vercel-forwarded-for` is set so the per-IP rate-limit key actually
+  // tracks `opts.ip` instead of a UA-derived fallback bucket.
+  const ip = opts.ip ?? "1.2.3.4";
   const headers: Record<string, string> = {
     "content-type": "application/json",
-    "x-forwarded-for": opts.ip ?? "1.2.3.4",
+    "x-forwarded-for": ip,
+    "x-vercel-forwarded-for": ip,
+    host: "x.test",
+    origin: "http://x.test",
+    "content-length": String(Buffer.byteLength(bodyStr, "utf8")),
     ...(opts.headers ?? {}),
   };
-  let body: BodyInit | undefined;
-  if (opts.rawBody !== undefined) {
-    body = opts.rawBody;
-  } else if (opts.body !== undefined) {
-    body = JSON.stringify(opts.body);
-  } else {
-    body = JSON.stringify({ code: VALID_CODE });
-  }
   return new Request("http://x.test/api/open", {
     method: "POST",
     headers,
-    body,
+    body: bodyStr,
   });
 }
 
@@ -346,16 +361,18 @@ describe("POST /api/open — code lookup / unavailability", () => {
 // =============================================================================
 
 describe("POST /api/open — response shape (anti-leak)", () => {
-  it("success body has EXACTLY { pack, country } and no extra fields", async () => {
+  it("success body has EXACTLY { pack, country, tier } and no extra fields", async () => {
     findUniqueMock.mockResolvedValueOnce(
       codeRowFixture({ packResult: VALID_PACK_RESULT, country: "GT" }),
     );
     const res = await POST(makeReq());
     expect(res.status).toBe(200);
     const body = (await res.json()) as Record<string, unknown>;
-    expect(Object.keys(body).sort()).toEqual(["country", "pack"]);
+    expect(Object.keys(body).sort()).toEqual(["country", "pack", "tier"]);
     expect(body.country).toBe("GT");
     expect(body.pack).toEqual(VALID_PACK_RESULT);
+    // tier viene del prize_set (decisión 2026-05-28). Fixture default es bronce.
+    expect(body.tier).toBe("bronce");
   });
 
   it("does NOT include code, id, prize_set_id, variable_pool, weights, redeemed_by, redeemed_ip", async () => {
@@ -390,6 +407,10 @@ describe("POST /api/open — response shape (anti-leak)", () => {
 
 describe("POST /api/open — atomicity and re-opening", () => {
   it("first open: persists pack_result via updateMany and returns it", async () => {
+    // Pipeline does two findUnique calls in the first-open path:
+    //   1. lightweight lookup (status/packResult/expiresAt)
+    //   2. full row + prizeSet for pack resolution
+    findUniqueMock.mockResolvedValueOnce(codeRowFixture({ packResult: null }));
     findUniqueMock.mockResolvedValueOnce(codeRowFixture({ packResult: null }));
     updateManyMock.mockResolvedValueOnce({ count: 1 });
     const res = await POST(makeReq());
@@ -434,7 +455,9 @@ describe("POST /api/open — atomicity and re-opening", () => {
         { type: "none", label: "Pack ganador 2" },
       ],
     };
-    // First findUnique: code is active, no pack yet.
+    // First findUnique: lightweight lookup, code active, no pack yet.
+    findUniqueMock.mockResolvedValueOnce(codeRowFixture({ packResult: null }));
+    // Second findUnique: full row + prizeSet for resolution.
     findUniqueMock.mockResolvedValueOnce(codeRowFixture({ packResult: null }));
     // updateMany loses the race.
     updateManyMock.mockResolvedValueOnce({ count: 0 });
@@ -455,6 +478,7 @@ describe("POST /api/open — atomicity and re-opening", () => {
 
   it("race: updateMany returns count=0 and refetch shows pack still null → defensive 404", async () => {
     findUniqueMock.mockResolvedValueOnce(codeRowFixture({ packResult: null }));
+    findUniqueMock.mockResolvedValueOnce(codeRowFixture({ packResult: null }));
     updateManyMock.mockResolvedValueOnce({ count: 0 });
     findUniqueMock.mockResolvedValueOnce({
       packResult: null,
@@ -469,6 +493,7 @@ describe("POST /api/open — atomicity and re-opening", () => {
   });
 
   it("race: updateMany returns count=0 and winning pack is malformed → defensive 404", async () => {
+    findUniqueMock.mockResolvedValueOnce(codeRowFixture({ packResult: null }));
     findUniqueMock.mockResolvedValueOnce(codeRowFixture({ packResult: null }));
     updateManyMock.mockResolvedValueOnce({ count: 0 });
     findUniqueMock.mockResolvedValueOnce({
@@ -488,12 +513,15 @@ describe("POST /api/open — atomicity and re-opening", () => {
 // =============================================================================
 
 describe("POST /api/open — rate limiting", () => {
-  it("11th request from the same IP within 1 minute → 429 rate_limited", async () => {
-    // Use 10 different valid codes (with not_found) so the per-code limit
-    // (5/min) never triggers — we want to isolate the IP rule.
-    for (let i = 0; i < 10; i++) {
-      findUniqueMock.mockResolvedValueOnce(null);
-    }
+  it("11th first-open request from the same IP within 1 minute → 429 rate_limited", async () => {
+    // Per-IP cap (10/min) is enforced AFTER the lookup confirms a real,
+    // active, first-open code — re-opens and not_found requests skip it so
+    // honest /sobre refreshes and bad-guess noise don't burn the bucket.
+    // To exercise it we stage 10 distinct active first-open codes from the
+    // SAME ip and assert the 11th is blocked. Each first-open needs:
+    //   (a) lightweight lookup mock
+    //   (b) full row + prizeSet for resolution
+    //   (c) updateMany returning count=1
     const codes = [
       "ABCDEFGHJKLMNPQR",
       "ABCDEFGHJKLMNPQS",
@@ -507,8 +535,18 @@ describe("POST /api/open — rate limiting", () => {
       "ABCDEFGHJKLMNPR2",
     ];
     for (const c of codes) {
+      findUniqueMock.mockResolvedValueOnce(codeRowFixture({ code: c, packResult: null }));
+      findUniqueMock.mockResolvedValueOnce(codeRowFixture({ code: c, packResult: null }));
+      updateManyMock.mockResolvedValueOnce({ count: 1 });
+    }
+    // 11th request: lookup mock so we get past the not_found check and hit
+    // the per-IP limiter.
+    findUniqueMock.mockResolvedValueOnce(
+      codeRowFixture({ code: "ABCDEFGHJKLMNPR3", packResult: null }),
+    );
+    for (const c of codes) {
       const r = await POST(makeReq({ ip: "5.5.5.5", body: { code: c } }));
-      expect([200, 404]).toContain(r.status);
+      expect(r.status, `first-open ${c} should succeed`).toBe(200);
     }
     const res11 = await POST(
       makeReq({ ip: "5.5.5.5", body: { code: "ABCDEFGHJKLMNPR3" } }),
@@ -518,13 +556,22 @@ describe("POST /api/open — rate limiting", () => {
   });
 
   it("6th request on the same code within 1 minute → 429 rate_limited", async () => {
+    // Per-code limit now triggers AFTER the lightweight DB lookup and ONLY
+    // on first-open requests (re-opens skip it so cached packs always
+    // return). Stage 5 first-open flows + a 6th lightweight lookup; the
+    // per-code rule should reject the 6th before any further DB work.
     // Spread across 6 different IPs to keep the per-IP rule (10/min) loose.
     for (let i = 0; i < 5; i++) {
-      findUniqueMock.mockResolvedValueOnce(null);
+      findUniqueMock.mockResolvedValueOnce(codeRowFixture({ packResult: null }));
+      findUniqueMock.mockResolvedValueOnce(codeRowFixture({ packResult: null }));
+      updateManyMock.mockResolvedValueOnce({ count: 1 });
     }
+    // 6th request still passes the lightweight lookup so it reaches the
+    // per-code rate-limit check.
+    findUniqueMock.mockResolvedValueOnce(codeRowFixture({ packResult: null }));
     for (let i = 0; i < 5; i++) {
       const r = await POST(makeReq({ ip: `10.0.0.${i + 1}`, body: { code: VALID_CODE } }));
-      expect(r.status).toBe(404);
+      expect(r.status).toBe(200);
     }
     const res6 = await POST(makeReq({ ip: "10.0.0.99", body: { code: VALID_CODE } }));
     expect(res6.status).toBe(429);
@@ -532,41 +579,80 @@ describe("POST /api/open — rate limiting", () => {
   });
 
   it("different IPs do not interfere with each other's IP buckets", async () => {
-    findUniqueMock.mockResolvedValue(null);
-    // 10 requests from IP A — should all pass the rate gate (10/min).
-    for (let i = 0; i < 10; i++) {
-      const r = await POST(
-        makeReq({ ip: "7.7.7.7", body: { code: `ABCDEFGHJKLMNP${(i % 10) + 2}R` } }),
-      );
-      expect(r.status).not.toBe(429);
+    // Per-IP cap is post-lookup + first-open only; mock 10 distinct active
+    // first-open codes for IP A so we actually consume the bucket, then a
+    // 11th to verify it's blocked, then a 1st for IP B to verify isolation.
+    const codes10 = [
+      "BCDEFGHJKLMNPQR2",
+      "BCDEFGHJKLMNPQR3",
+      "BCDEFGHJKLMNPQR4",
+      "BCDEFGHJKLMNPQR5",
+      "BCDEFGHJKLMNPQR6",
+      "CDEFGHJKLMNPQR23",
+      "CDEFGHJKLMNPQR24",
+      "CDEFGHJKLMNPQR25",
+      "CDEFGHJKLMNPQR26",
+      "CDEFGHJKLMNPQR27",
+    ];
+    for (const c of codes10) {
+      findUniqueMock.mockResolvedValueOnce(codeRowFixture({ code: c, packResult: null }));
+      findUniqueMock.mockResolvedValueOnce(codeRowFixture({ code: c, packResult: null }));
+      updateManyMock.mockResolvedValueOnce({ count: 1 });
+    }
+    // 11th lookup for IP A — needs an active code so it reaches the IP gate.
+    findUniqueMock.mockResolvedValueOnce(
+      codeRowFixture({ code: "DEFGHJKLMNPQR234", packResult: null }),
+    );
+    // 1st lookup for IP B — also active, should pass through.
+    findUniqueMock.mockResolvedValueOnce(
+      codeRowFixture({ code: "EFGHJKLMNPQR2345", packResult: null }),
+    );
+    findUniqueMock.mockResolvedValueOnce(
+      codeRowFixture({ code: "EFGHJKLMNPQR2345", packResult: null }),
+    );
+    updateManyMock.mockResolvedValueOnce({ count: 1 });
+
+    for (const code of codes10) {
+      const r = await POST(makeReq({ ip: "7.7.7.7", body: { code } }));
+      expect(r.status, `first-open ${code} should succeed`).toBe(200);
     }
     // 11th from A → blocked.
     const blocked = await POST(
-      makeReq({ ip: "7.7.7.7", body: { code: "ABCDEFGHJKLMNQRS" } }),
+      makeReq({ ip: "7.7.7.7", body: { code: "DEFGHJKLMNPQR234" } }),
     );
     expect(blocked.status).toBe(429);
     // 1st from B → still fine.
     const fresh = await POST(
-      makeReq({ ip: "8.8.8.8", body: { code: "ABCDEFGHJKLMNQRT" } }),
+      makeReq({ ip: "8.8.8.8", body: { code: "EFGHJKLMNPQR2345" } }),
     );
     expect(fresh.status).not.toBe(429);
   });
 
   it("different codes do not interfere with each other's code buckets", async () => {
-    findUniqueMock.mockResolvedValue(null);
-    // 5 requests on VALID_CODE from different IPs — fill its code bucket.
+    // Same setup as the prior test: stage 5 first-open flows on VALID_CODE so
+    // the per-code limit (5/min) actually triggers, then assert VALID_CODE_2
+    // is still allowed. Each first-open needs two findUnique mocks; the 6th
+    // blocked request still needs a lightweight lookup mock to reach the
+    // per-code rate-limit gate.
+    for (let i = 0; i < 5; i++) {
+      findUniqueMock.mockResolvedValueOnce(codeRowFixture({ packResult: null }));
+      findUniqueMock.mockResolvedValueOnce(codeRowFixture({ packResult: null }));
+      updateManyMock.mockResolvedValueOnce({ count: 1 });
+    }
+    findUniqueMock.mockResolvedValueOnce(codeRowFixture({ packResult: null })); // 6th lookup
     for (let i = 0; i < 5; i++) {
       const r = await POST(
         makeReq({ ip: `11.0.0.${i + 1}`, body: { code: VALID_CODE } }),
       );
-      expect(r.status).toBe(404);
+      expect(r.status).toBe(200);
     }
-    // 6th on VALID_CODE → blocked.
+    // 6th on VALID_CODE → blocked by per-code rule.
     const blocked = await POST(
       makeReq({ ip: "11.0.0.99", body: { code: VALID_CODE } }),
     );
     expect(blocked.status).toBe(429);
-    // 1st on VALID_CODE_2 → still fine.
+    // 1st on VALID_CODE_2 from a fresh IP → still fine.
+    findUniqueMock.mockResolvedValueOnce(null);
     const fresh = await POST(
       makeReq({ ip: "11.0.0.50", body: { code: VALID_CODE_2 } }),
     );
@@ -648,6 +734,9 @@ describe("POST /api/open — internal errors", () => {
   });
 
   it("updateMany throws → 500 internal, no detail leaked in body", async () => {
+    // Two findUnique calls (lightweight lookup + full row w/ prizeSet) before
+    // updateMany is reached on the first-open path.
+    findUniqueMock.mockResolvedValueOnce(codeRowFixture({ packResult: null }));
     findUniqueMock.mockResolvedValueOnce(codeRowFixture({ packResult: null }));
     updateManyMock.mockRejectedValueOnce(new Error("boom-update-detail"));
     const res = await POST(makeReq());
@@ -686,8 +775,16 @@ describe("POST /api/open — security headers across status codes", () => {
   });
 
   it("429 rate_limited carries all security headers", async () => {
-    findUniqueMock.mockResolvedValue(null);
-    // Burn the per-code bucket (5/min) then trip a 429.
+    // Stage 5 first-open flows so the per-code limit (5/min) actually trips
+    // on the 6th request (per-code limit now runs AFTER the DB lookup and
+    // only for first opens). 6th still needs a lightweight lookup mock to
+    // reach the per-code rate-limit gate.
+    for (let i = 0; i < 5; i++) {
+      findUniqueMock.mockResolvedValueOnce(codeRowFixture({ packResult: null }));
+      findUniqueMock.mockResolvedValueOnce(codeRowFixture({ packResult: null }));
+      updateManyMock.mockResolvedValueOnce({ count: 1 });
+    }
+    findUniqueMock.mockResolvedValueOnce(codeRowFixture({ packResult: null }));
     for (let i = 0; i < 5; i++) {
       await POST(makeReq({ ip: `12.0.0.${i + 1}`, body: { code: VALID_CODE } }));
     }

@@ -3,10 +3,18 @@
 
 import { z } from "zod";
 import type {
+  EnvelopeTier,
   Prize,
   PackResult,
   VariablePoolEntry,
 } from "./types";
+
+export const envelopeTierSchema: z.ZodType<EnvelopeTier> = z.enum([
+  "bronce",
+  "plata",
+  "oro",
+  "platino",
+]);
 
 const currencySchema = z.union([z.literal("USD"), z.literal("GTQ")]);
 
@@ -34,6 +42,14 @@ export const depositMatchPrizeSchema = z.object({
 export const physicalPrizeSchema = z.object({
   type: z.literal("physical"),
   sku: z.string().min(1),
+  category: z.enum([
+    "cinema_combo",
+    "jersey_local",
+    "jersey_intl",
+    "selecta_merch",
+    "motorcycle",
+    "other",
+  ]),
   label: z.string().min(1),
   redemption_instructions: z.string().min(1),
 });

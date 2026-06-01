@@ -69,6 +69,8 @@ export function Logo({
       height={height}
       className={className}
       priority={priority}
+      sizes={`${width}px`}
+      fetchPriority={priority ? 'high' : 'auto'}
     />
   );
 }

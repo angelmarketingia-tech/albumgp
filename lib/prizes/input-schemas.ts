@@ -13,13 +13,18 @@ import { z } from "zod";
 
 export const CODE_REGEX = /^[A-HJ-NP-Z2-9]{16}$/;
 
-export const codeInputSchema = z.object({
-  code: z
-    .string()
-    .trim()
-    .toUpperCase()
-    .regex(CODE_REGEX, "invalid_format"),
-});
+// `.strict()` so client-supplied keys like `tier` or `country` raise
+// `invalid_input` instead of being silently dropped — integrators must
+// learn in QA that those fields are server-decided, not client-influenced.
+export const codeInputSchema = z
+  .object({
+    code: z
+      .string()
+      .trim()
+      .toUpperCase()
+      .regex(CODE_REGEX, "invalid_format"),
+  })
+  .strict();
 
 export type CodeInput = z.infer<typeof codeInputSchema>;
 

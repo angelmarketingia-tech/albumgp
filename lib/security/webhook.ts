@@ -37,9 +37,9 @@ export function signWebhookPayload(
   secret: string,
   now: number = Date.now(),
 ): SignedWebhook {
-  if (!secret || secret.length < 16) {
+  if (!secret || secret.length < 32) {
     // No leakeamos el valor en el error; sólo señalamos que está mal.
-    throw new Error("[webhook] secret faltante o demasiado corto (<16 chars).");
+    throw new Error("[webhook] secret faltante o demasiado corto (<32 chars).");
   }
   const timestamp = Math.floor(now / 1000).toString();
   const signedBody = `${timestamp}.${payload}`;

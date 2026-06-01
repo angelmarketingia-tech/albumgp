@@ -35,9 +35,29 @@ export type DepositMatchPrize = {
   label: string;
 };
 
+/**
+ * Categoría de premio físico — define qué icono usa la carta y cómo el equipo
+ * de operaciones procesa el canje.
+ *
+ *  - `cinema_combo`    Combo Cinemark (entradas + comida).
+ *  - `jersey_local`    Camiseta de equipo local (patrocinado por GanaPlay SV/GT).
+ *  - `jersey_intl`     Camiseta de club internacional (no patrocinado).
+ *  - `selecta_merch`   Producto oficial de La Selecta (SV únicamente).
+ *  - `motorcycle`      Premio mayor — moto (sobres Diamante, key 'platino').
+ *  - `other`           SKU físico que no encaja arriba; usar con label claro.
+ */
+export type PhysicalCategory =
+  | "cinema_combo"
+  | "jersey_local"
+  | "jersey_intl"
+  | "selecta_merch"
+  | "motorcycle"
+  | "other";
+
 export type PhysicalPrize = {
   type: "physical";
   sku: string;
+  category: PhysicalCategory;
   label: string;
   redemption_instructions: string;
 };
@@ -97,3 +117,24 @@ export type PackResult = {
 };
 
 export const PACK_VERSION_CURRENT = "v1";
+
+/**
+ * Clasificación de sobres por valor del mix de premios.
+ *
+ * - `bronce`  → entrada — free bets pequeñas, giros, Rappi chico.
+ * - `plata`   → + camisetas de equipos locales, merch de La Selecta (SV only).
+ * - `oro`     → + combos Cinemark, free bets medianos, Rappi grande.
+ * - `platino` → top tier — camisetas internacionales, moto (GT), free bet máxima.
+ *
+ * El tier vive en `prize_sets.tier` y se propaga a la UI para diferenciar el
+ * sobre cerrado y la entry screen. El usuario lo conoce ANTES de abrir para
+ * generar anticipación (decisión de producto, 2026-05-28).
+ */
+export type EnvelopeTier = "bronce" | "plata" | "oro" | "platino";
+
+export const ENVELOPE_TIERS: readonly EnvelopeTier[] = [
+  "bronce",
+  "plata",
+  "oro",
+  "platino",
+] as const;

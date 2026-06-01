@@ -3,6 +3,7 @@ import type { JSX } from "react";
 
 import { RarityBadge } from "@/components/cards/RarityBadge";
 import type { CollectibleSlot } from "@/lib/album/group";
+import { RARITY_BAR_COLOR } from "@/lib/prizes/tiers";
 
 /**
  * "Repisa" de coleccionables de una sola rareza. Se compone de:
@@ -30,18 +31,19 @@ const HEADER_LABEL: Record<ShelfRarity, string> = {
 };
 
 function CollectibleTile({ slot }: { slot: CollectibleSlot }): JSX.Element {
-  const hasImage = slot.image_url !== undefined && slot.image_url.length > 0;
+  const imageUrl = slot.image_url;
+  const hasImage = typeof imageUrl === "string" && imageUrl.length > 0;
 
   return (
     <div
       data-collectible-id={slot.collectible_id}
       data-rarity={slot.rarity}
-      className="relative flex aspect-[2/3] flex-col items-center justify-center overflow-hidden rounded border border-white/20 bg-white p-2 text-center"
+      className="relative flex aspect-[2/3] flex-col items-center justify-center overflow-hidden rounded border border-white/20 bg-gradient-to-b from-white to-gp-gray-light/40 p-2 text-center transition-transform hover:scale-[1.04]"
     >
       {hasImage ? (
-        <div className="relative h-3/5 w-3/5">
+        <div className="relative h-[70%] w-3/5">
           <Image
-            src={slot.image_url ?? ""}
+            src={imageUrl}
             alt={slot.label}
             fill
             sizes="(max-width: 768px) 25vw, 128px"
@@ -51,10 +53,10 @@ function CollectibleTile({ slot }: { slot: CollectibleSlot }): JSX.Element {
       ) : (
         <div
           aria-hidden
-          className="flex h-3/5 w-3/5 items-center justify-center rounded bg-gp-gray-light/40"
+          className="flex h-[70%] w-3/5 items-center justify-center rounded-full border-2 border-dashed border-gp-gray-light/60"
         />
       )}
-      <p className="mt-1 line-clamp-2 font-sans text-[10px] font-bold uppercase tracking-wide text-gp-green">
+      <p className="mt-1 line-clamp-2 font-sans text-xs font-bold uppercase tracking-wide text-gp-green">
         {slot.label}
       </p>
       {slot.count > 1 ? (
@@ -82,6 +84,11 @@ export function RarityShelf({ rarity, slots }: RarityShelfProps): JSX.Element | 
     >
       <header className="flex items-center justify-between gap-2">
         <div className="flex items-center gap-2">
+          <span
+            aria-hidden
+            className="block h-6 w-1 rounded-full"
+            style={{ background: RARITY_BAR_COLOR[rarity] }}
+          />
           <RarityBadge rarity={rarity} />
           <h2 className="font-display text-lg font-bold text-white">
             {HEADER_LABEL[rarity]}
@@ -96,6 +103,7 @@ export function RarityShelf({ rarity, slots }: RarityShelfProps): JSX.Element | 
           <CollectibleTile key={slot.collectible_id} slot={slot} />
         ))}
       </div>
+      <div className="mt-3 h-px bg-gradient-to-r from-transparent via-white/15 to-transparent" />
     </section>
   );
 }

@@ -1,10 +1,34 @@
-import { describe, it, expect, beforeEach } from "vitest";
+import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { InMemoryRedis } from "../lib/redis/client";
 import {
   rateLimit,
   keyForIp,
   keyForCode,
 } from "../lib/redis/rate-limit";
+
+// `extractClientIp` only trusts XFF when running on Vercel (via
+// `x-vercel-forwarded-for`) or when the peer matches `TRUSTED_PROXY_CIDRS`.
+// Outside of those it falls back to a UA-hashed bucket so client-spoofed XFF
+// can't share a "real" IP bucket. The keyForIp tests below simulate the
+// trusted-proxy mode so XFF is honored.
+function withTrustedProxy<T>(fn: () => T): T {
+  const prev = process.env.TRUSTED_PROXY_CIDRS;
+  process.env.TRUSTED_PROXY_CIDRS = "127.0.0.1";
+  try {
+    return fn();
+  } finally {
+    if (prev === undefined) delete process.env.TRUSTED_PROXY_CIDRS;
+    else process.env.TRUSTED_PROXY_CIDRS = prev;
+  }
+}
+
+function requestWithPeer(peerIp: string, headers: Record<string, string>): Request {
+  const req = new Request("http://x.test", { headers });
+  // The rate-limit code reads `req.ip` or `req.socket.remoteAddress`. The
+  // standard Request shape exposes neither, so attach it for the test.
+  Object.defineProperty(req, "ip", { value: peerIp, configurable: true });
+  return req;
+}
 
 describe("rateLimit (fixed-window, InMemoryRedis)", () => {
   let redis: InMemoryRedis;
@@ -78,30 +102,44 @@ describe("rateLimit (fixed-window, InMemoryRedis)", () => {
 });
 
 describe("keyForIp", () => {
-  it("uses the first IP from x-forwarded-for", () => {
-    const req = new Request("http://x.test", {
-      headers: { "x-forwarded-for": "203.0.113.5, 10.0.0.1" },
+  it("uses the trusted-proxy XFF (last hop = our proxy's observed client)", () => {
+    // Outside Vercel, XFF is honored only when peer is in TRUSTED_PROXY_CIDRS,
+    // and the trusted code takes the LAST hop (set by our own proxy) — the
+    // FIRST hop is client-supplied and untrusted.
+    withTrustedProxy(() => {
+      const req = requestWithPeer("127.0.0.1", {
+        "x-forwarded-for": "10.0.0.1, 203.0.113.5",
+      });
+      expect(keyForIp(req, "open")).toBe("rl:ip:open:203.0.113.5");
     });
-    expect(keyForIp(req, "open")).toBe("rl:ip:open:203.0.113.5");
   });
 
-  it("falls back to 'unknown' when header is missing", () => {
+  // Cuando el header IP falta o trae basura, NO usamos un literal compartido
+  // ("unknown"): un bad actor podría inundar ese bucket y bloquear a todos
+  // los usuarios sin proxy. En su lugar derivamos un bucket per-cliente
+  // hasheando UA + Accept-Language. El prefijo es "ua:" para distinguir.
+  it("falls back to a UA-hashed bucket when header is missing", () => {
     const req = new Request("http://x.test");
-    expect(keyForIp(req, "open")).toBe("rl:ip:open:unknown");
+    const key = keyForIp(req, "open");
+    expect(key.startsWith("rl:ip:open:ua:")).toBe(true);
+    expect(key.length).toBeGreaterThan("rl:ip:open:ua:".length + 10);
   });
 
-  it("falls back to 'unknown' on garbage IP (sanitization)", () => {
+  it("falls back to a UA-hashed bucket on garbage IP (sanitization)", () => {
     const req = new Request("http://x.test", {
       headers: { "x-forwarded-for": "not-an-ip; DROP TABLE codes;--" },
     });
-    expect(keyForIp(req, "redeem")).toBe("rl:ip:redeem:unknown");
+    const key = keyForIp(req, "redeem");
+    expect(key.startsWith("rl:ip:redeem:ua:")).toBe(true);
   });
 
   it("accepts IPv6", () => {
-    const req = new Request("http://x.test", {
-      headers: { "x-forwarded-for": "2001:db8::1" },
+    withTrustedProxy(() => {
+      const req = requestWithPeer("127.0.0.1", {
+        "x-forwarded-for": "2001:db8::1",
+      });
+      expect(keyForIp(req, "open")).toBe("rl:ip:open:2001:db8::1");
     });
-    expect(keyForIp(req, "open")).toBe("rl:ip:open:2001:db8::1");
   });
 });
 

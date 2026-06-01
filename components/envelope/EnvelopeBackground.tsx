@@ -18,7 +18,7 @@ import { GANAPLAY_SLOGAN, LEGAL_NOTICES } from "@/lib/brand/constants";
  * fuerza en el call site.
  */
 export interface EnvelopeBackgroundProps {
-  country: "SV" | "GT";
+  country?: "SV" | "GT" | undefined;
   children: ReactNode;
 }
 
@@ -29,8 +29,8 @@ export function EnvelopeBackground({
   return (
     <div
       data-envelope-bg
-      data-country={country}
-      className="flex min-h-screen flex-col bg-gp-radial text-gp-white"
+      data-country={country ?? "unknown"}
+      className="flex min-h-screen flex-col text-gp-white relative"
     >
       <header className="flex flex-col items-center gap-3 px-4 pt-8 text-center">
         <Logo variant="blanco" width={180} priority />
@@ -39,11 +39,12 @@ export function EnvelopeBackground({
         </p>
       </header>
 
-      <main className="flex-1">
-        <div className="mx-auto w-full max-w-6xl px-4 py-8">{children}</div>
+      <main id="main-content" className="flex-1">
+        <div className="mx-auto w-full max-w-3xl px-4 py-8">{children}</div>
       </main>
 
-      <footer className="px-4 pb-6 pt-4 text-center text-xs text-gp-gray-light">
+      {/* WCAG AA: legal copy needs ≥4.5:1 on gp-radial; wider type helps dyslexic readers parse tracking. */}
+      <footer className="mx-auto w-full max-w-3xl px-4 pb-6 pt-4 text-center text-xs uppercase tracking-[0.3em] text-white/80">
         <span>{LEGAL_NOTICES.ageGate}</span>
         <span aria-hidden className="mx-2">
           ·

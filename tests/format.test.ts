@@ -84,6 +84,7 @@ describe("prizeShortDescription", () => {
     const prize: Prize = {
       type: "physical",
       sku: "T-001",
+      category: "jersey_local",
       label: "Camiseta GanaPlay",
       redemption_instructions: "Retirar en oficina",
     };
