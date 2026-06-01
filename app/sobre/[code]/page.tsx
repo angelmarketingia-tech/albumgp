@@ -213,7 +213,7 @@ export default async function SobrePage({
             </p>
             <Link
               href={redeemHref}
-              className="inline-flex h-14 w-full items-center justify-center gap-2 rounded-md bg-gradient-to-r from-gp-green via-gp-green to-emerald-500 px-7 font-sans text-lg font-bold uppercase tracking-wide text-gp-white shadow-lg shadow-gp-green/40 transition-transform hover:scale-[1.02] focus-visible:ring-2 focus-visible:ring-gp-gold focus-visible:ring-offset-2 focus-visible:ring-offset-gp-green-deep"
+              className="inline-flex h-14 w-full items-center justify-center gap-2 rounded-md bg-gradient-to-r from-gp-green via-gp-green to-gp-green-core px-7 font-sans text-lg font-bold uppercase tracking-wide text-gp-white shadow-lg shadow-gp-green/40 transition-transform hover:scale-[1.02] focus-visible:ring-2 focus-visible:ring-gp-gold focus-visible:ring-offset-2 focus-visible:ring-offset-gp-green-deep"
             >
               <span aria-hidden>✦</span>
               <span>Canjear premios</span>

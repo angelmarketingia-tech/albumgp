@@ -393,13 +393,17 @@ describe("POST /api/redeem — input validation (with auth)", () => {
   });
 
   it("400 on forbidden chars: I, 1, 0, O", async () => {
-    for (const bad of [
+    const bads = [
       "ABCDEFGHJKLMNPQI",
       "ABCDEFGHJKLMNPQ1",
       "ABCDEFGHJKLMNPQ0",
       "ABCDEFGHJKLMNPQO",
-    ]) {
-      const res = await POST(makeReq({ body: { code: bad } }));
+    ];
+    // Distinct IPs per case so the per-IP rate-limit (3/min) can't mask a
+    // validation failure once we exceed 3 iterations — this is a format test.
+    for (let i = 0; i < bads.length; i++) {
+      const bad = bads[i];
+      const res = await POST(makeReq({ ip: `4.4.4.${i + 1}`, body: { code: bad } }));
       expect(res.status, `code ${bad} should be rejected`).toBe(400);
     }
   });
@@ -819,24 +823,23 @@ describe("POST /api/redeem — rate limiting", () => {
     resolveAccountIdMock.mockResolvedValue(VALID_ACCOUNT_ID);
   });
 
-  it("6th request from the same IP within 1 minute → 429; auth keeps passing", async () => {
-    // 5 fresh requests with DIFFERENT valid codes (so the per-code 1/min limit
-    // never trips) but the same IP. They should each respond with 404
-    // (updateMany count=0) — what matters is auth and IP buckets.
+  it("4th request from the same IP within 1 minute → 429; auth keeps passing", async () => {
+    // Per-IP cap is 3/min. 3 fresh requests with DIFFERENT valid codes (so the
+    // per-code 1/min limit never trips) on the same IP each respond 404
+    // (updateMany count=0); the 4th trips the IP bucket. Auth runs on every one
+    // (it's checked BEFORE rate limit), including the blocked request.
     updateManyMock.mockResolvedValue({ count: 0 });
     const codes = [
       "ABCDEFGHJKLMNPQR",
       "ABCDEFGHJKLMNPQS",
       "ABCDEFGHJKLMNPQT",
-      "ABCDEFGHJKLMNPQU",
-      "ABCDEFGHJKLMNPQV",
     ];
     for (const c of codes) {
       const r = await POST(makeReq({ ip: "5.5.5.5", body: { code: c } }));
       expect(r.status).toBe(404);
     }
     const blocked = await POST(
-      makeReq({ ip: "5.5.5.5", body: { code: "ABCDEFGHJKLMNPQW" } }),
+      makeReq({ ip: "5.5.5.5", body: { code: "ABCDEFGHJKLMNPQU" } }),
     );
     expect(blocked.status).toBe(429);
     expect(await blocked.json()).toEqual({ error: "rate_limited" });
@@ -857,28 +860,61 @@ describe("POST /api/redeem — rate limiting", () => {
     expect(await r2.json()).toEqual({ error: "rate_limited" });
   });
 
-  it("different IPs do NOT interfere with each other's IP buckets", async () => {
+  it("different accounts on different IPs do NOT interfere", async () => {
+    // Account A on IP 7.7.7.7 hits its per-IP cap (3). A *different* account on
+    // a fresh IP must still pass — its IP bucket and account bucket are clean.
     updateManyMock.mockResolvedValue({ count: 0 });
     const codesA = [
       "ABCDEFGHJKLMNPQR",
       "ABCDEFGHJKLMNPQS",
       "ABCDEFGHJKLMNPQT",
-      "ABCDEFGHJKLMNPQU",
-      "ABCDEFGHJKLMNPQV",
     ];
     for (const c of codesA) {
       const r = await POST(makeReq({ ip: "7.7.7.7", body: { code: c } }));
       expect(r.status).not.toBe(429);
     }
     const blockedA = await POST(
-      makeReq({ ip: "7.7.7.7", body: { code: "ABCDEFGHJKLMNPQW" } }),
+      makeReq({ ip: "7.7.7.7", body: { code: "ABCDEFGHJKLMNPQU" } }),
     );
     expect(blockedA.status).toBe(429);
-    // Fresh IP — same code 'pool', different IP bucket → must not 429.
+    // Fresh IP AND a different account → both buckets clean → must not 429.
+    resolveAccountIdMock.mockResolvedValueOnce("mock:fedcba9876543210");
     const freshB = await POST(
       makeReq({ ip: "8.8.8.8", body: { code: VALID_CODE_2 } }),
     );
     expect(freshB.status).not.toBe(429);
+  });
+
+  it("per-account cap spans IPs: one account spraying across many IPs is throttled", async () => {
+    // The whole point of the per-account rule: a botnet rotating IPs but reusing
+    // one account can't exceed 10 redeems/min. We fire 10 requests, each from a
+    // DISTINCT IP and a DISTINCT code (so neither the per-IP 3/min nor the
+    // per-code 1/min trips), all on the SAME account. The 11th must 429 purely
+    // on the per-account bucket.
+    updateManyMock.mockResolvedValue({ count: 0 });
+    const codes = [
+      "ABCDEFGHJKLMNP22",
+      "ABCDEFGHJKLMNP23",
+      "ABCDEFGHJKLMNP24",
+      "ABCDEFGHJKLMNP25",
+      "ABCDEFGHJKLMNP26",
+      "ABCDEFGHJKLMNP27",
+      "ABCDEFGHJKLMNP28",
+      "ABCDEFGHJKLMNP29",
+      "ABCDEFGHJKLMNP32",
+      "ABCDEFGHJKLMNP33",
+    ];
+    for (let i = 0; i < codes.length; i++) {
+      const r = await POST(
+        makeReq({ ip: `9.0.0.${i + 1}`, body: { code: codes[i] } }),
+      );
+      expect(r.status).not.toBe(429);
+    }
+    const blocked = await POST(
+      makeReq({ ip: "9.0.0.250", body: { code: "ABCDEFGHJKLMNP34" } }),
+    );
+    expect(blocked.status).toBe(429);
+    expect(await blocked.json()).toEqual({ error: "rate_limited" });
   });
 });
 

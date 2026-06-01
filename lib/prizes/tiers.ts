@@ -22,6 +22,11 @@ export interface TierTheme {
   accentHex: string;
 }
 
+// ALL tier themes stay inside the official brand palette (brand/README.md):
+// green #00783E, green-deep #034419, grays #6D6E71/#A7A9AC, white, and the
+// approved gold accent #D4A017 + gold gradient. No off-brand amber/slate/cyan.
+// The four tiers read as a deliberate progression: deep green (entry) →
+// brand silver-gray → gold → green+gold premium. Distinct, yet coherent.
 export const TIER_THEME: Readonly<Record<EnvelopeTier, TierTheme>> = Object.freeze({
   bronce: {
     tier: "bronce",
@@ -29,11 +34,12 @@ export const TIER_THEME: Readonly<Record<EnvelopeTier, TierTheme>> = Object.free
     // so screen readers read "Bronce" instead of spelling B-R-O-N-C-E.
     label: "Bronce",
     tagline: "Tu pase de entrada al álbum",
+    // Entry tier: deep brand green base, understated. On-palette.
     badgeClass:
-      "bg-gradient-to-br from-amber-800 via-amber-600 to-amber-900 text-amber-50 shadow-md shadow-amber-900/40 ring-1 ring-inset ring-amber-300/30",
-    envelopeBorderClass: "border-amber-700",
-    envelopeGlow: "rgba(180, 83, 9, 0.55)",
-    accentHex: "#B45309",
+      "bg-gradient-to-br from-gp-green-deep via-gp-green to-gp-green-deep text-gp-white shadow-md shadow-gp-green-deep/40 ring-1 ring-inset ring-gp-white/15",
+    envelopeBorderClass: "border-gp-green",
+    envelopeGlow: "rgba(3, 68, 25, 0.55)",
+    accentHex: "#034419",
   },
   plata: {
     tier: "plata",
@@ -41,19 +47,21 @@ export const TIER_THEME: Readonly<Record<EnvelopeTier, TierTheme>> = Object.free
     // Honest copy — universal variable_pool ships free bets + spins + match
     // bonus, not camisetas/merch.
     tagline: "Tu bienvenida con bono ampliado",
+    // Silver = official brand grays (#A7A9AC / #6D6E71). On-palette.
     badgeClass:
-      "bg-gradient-to-br from-slate-200 via-white to-slate-400 text-slate-800 shadow-md shadow-slate-400/30 ring-1 ring-inset ring-white/50",
-    envelopeBorderClass: "border-slate-300",
-    envelopeGlow: "rgba(203, 213, 225, 0.55)",
-    accentHex: "#CBD5E1",
+      "bg-gradient-to-br from-gp-gray-light via-white to-gp-gray-dark-1 text-gp-gray-dark-2 shadow-md shadow-gp-gray-dark-1/30 ring-1 ring-inset ring-white/50",
+    envelopeBorderClass: "border-gp-gray-light",
+    envelopeGlow: "rgba(167, 169, 172, 0.55)",
+    accentHex: "#A7A9AC",
   },
   oro: {
     tier: "oro",
     label: "Oro",
     // Honest copy — pool delivers bonus/free bets/spins, no cine experiences.
     tagline: "Bono premium para apostadores activos",
+    // Official approved gold gradient (#B8860B → #D4A017 → #F4D03F). On-palette.
     badgeClass:
-      "bg-[linear-gradient(135deg,#B8860B_0%,#D4A017_50%,#F4D03F_100%)] text-amber-950 shadow-lg shadow-amber-500/40 ring-1 ring-inset ring-amber-200/50",
+      "bg-[linear-gradient(135deg,#B8860B_0%,#D4A017_50%,#F4D03F_100%)] text-gp-green-deep shadow-lg shadow-gp-gold/40 ring-1 ring-inset ring-gp-gold/50",
     envelopeBorderClass: "border-gp-gold",
     envelopeGlow: "rgba(212, 160, 23, 0.65)",
     accentHex: "#D4A017",
@@ -64,20 +72,33 @@ export const TIER_THEME: Readonly<Record<EnvelopeTier, TierTheme>> = Object.free
     // Internal key stays `platino` for DB/seed/type compat.
     label: "Diamante",
     tagline: "Sobre Diamante — el premio mayor",
+    // Top tier: brand green core with a gold shimmer accent — the premium
+    // green+gold lockup from the artwork. Fully on-palette.
     badgeClass:
-      "bg-gradient-to-br from-cyan-100 via-white to-cyan-200 text-cyan-900 shadow-lg shadow-cyan-300/40 ring-1 ring-inset ring-white/60 animate-shimmer bg-[length:200%_100%]",
-    envelopeBorderClass: "border-cyan-200",
-    envelopeGlow: "rgba(165, 243, 252, 0.75)",
-    accentHex: "#A5F3FC",
+      "bg-gradient-to-br from-gp-green via-gp-green-core to-gp-green-deep text-gp-gold shadow-lg shadow-gp-gold/40 ring-1 ring-inset ring-gp-gold/60 animate-shimmer bg-[length:200%_100%]",
+    envelopeBorderClass: "border-gp-gold",
+    envelopeGlow: "rgba(212, 160, 23, 0.7)",
+    accentHex: "#00783E",
   },
 });
 
-/** Color spine por rarity para RarityShelf y otros tier indicators. */
+/**
+ * Color spine por rarity para RarityShelf y otros tier indicators.
+ *
+ * common/rare/legendary son colores oficiales del Manual (gris secundario,
+ * verde principal, dorado de acento). `epic` es el ÚNICO valor fuera de paleta:
+ * el Manual no define un color para esta categoría. `#5A3E9F` es la propuesta
+ * de Diseño [CONFIRMAR_EPIC_COLOR] (brand/README.md). Consolidado acá como
+ * única fuente de verdad — antes había dos morados distintos (#7C3AED aquí y
+ * rgba(168,85,247) en globals.css). Sustituir por el oficial cuando llegue.
+ */
+export const EPIC_COLOR = "#5A3E9F";
+
 export const RARITY_BAR_COLOR: Readonly<Record<"common" | "rare" | "epic" | "legendary", string>> =
   Object.freeze({
     common: "#A7A9AC",
     rare: "#00783E",
-    epic: "#7C3AED",
+    epic: EPIC_COLOR,
     legendary: "#D4A017",
   });
 

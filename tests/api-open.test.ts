@@ -407,10 +407,8 @@ describe("POST /api/open — response shape (anti-leak)", () => {
 
 describe("POST /api/open — atomicity and re-opening", () => {
   it("first open: persists pack_result via updateMany and returns it", async () => {
-    // Pipeline does two findUnique calls in the first-open path:
-    //   1. lightweight lookup (status/packResult/expiresAt)
-    //   2. full row + prizeSet for pack resolution
-    findUniqueMock.mockResolvedValueOnce(codeRowFixture({ packResult: null }));
+    // Pipeline does ONE findUnique in the first-open path: a single lookup that
+    // also selects the full prizeSet for pack resolution (no second round-trip).
     findUniqueMock.mockResolvedValueOnce(codeRowFixture({ packResult: null }));
     updateManyMock.mockResolvedValueOnce({ count: 1 });
     const res = await POST(makeReq());
@@ -455,9 +453,7 @@ describe("POST /api/open — atomicity and re-opening", () => {
         { type: "none", label: "Pack ganador 2" },
       ],
     };
-    // First findUnique: lightweight lookup, code active, no pack yet.
-    findUniqueMock.mockResolvedValueOnce(codeRowFixture({ packResult: null }));
-    // Second findUnique: full row + prizeSet for resolution.
+    // Single lookup (carries prizeSet), code active, no pack yet.
     findUniqueMock.mockResolvedValueOnce(codeRowFixture({ packResult: null }));
     // updateMany loses the race.
     updateManyMock.mockResolvedValueOnce({ count: 0 });
@@ -478,7 +474,6 @@ describe("POST /api/open — atomicity and re-opening", () => {
 
   it("race: updateMany returns count=0 and refetch shows pack still null → defensive 404", async () => {
     findUniqueMock.mockResolvedValueOnce(codeRowFixture({ packResult: null }));
-    findUniqueMock.mockResolvedValueOnce(codeRowFixture({ packResult: null }));
     updateManyMock.mockResolvedValueOnce({ count: 0 });
     findUniqueMock.mockResolvedValueOnce({
       packResult: null,
@@ -493,7 +488,6 @@ describe("POST /api/open — atomicity and re-opening", () => {
   });
 
   it("race: updateMany returns count=0 and winning pack is malformed → defensive 404", async () => {
-    findUniqueMock.mockResolvedValueOnce(codeRowFixture({ packResult: null }));
     findUniqueMock.mockResolvedValueOnce(codeRowFixture({ packResult: null }));
     updateManyMock.mockResolvedValueOnce({ count: 0 });
     findUniqueMock.mockResolvedValueOnce({
@@ -536,7 +530,6 @@ describe("POST /api/open — rate limiting", () => {
     ];
     for (const c of codes) {
       findUniqueMock.mockResolvedValueOnce(codeRowFixture({ code: c, packResult: null }));
-      findUniqueMock.mockResolvedValueOnce(codeRowFixture({ code: c, packResult: null }));
       updateManyMock.mockResolvedValueOnce({ count: 1 });
     }
     // 11th request: lookup mock so we get past the not_found check and hit
@@ -563,10 +556,9 @@ describe("POST /api/open — rate limiting", () => {
     // Spread across 6 different IPs to keep the per-IP rule (10/min) loose.
     for (let i = 0; i < 5; i++) {
       findUniqueMock.mockResolvedValueOnce(codeRowFixture({ packResult: null }));
-      findUniqueMock.mockResolvedValueOnce(codeRowFixture({ packResult: null }));
       updateManyMock.mockResolvedValueOnce({ count: 1 });
     }
-    // 6th request still passes the lightweight lookup so it reaches the
+    // 6th request still passes the lookup so it reaches the
     // per-code rate-limit check.
     findUniqueMock.mockResolvedValueOnce(codeRowFixture({ packResult: null }));
     for (let i = 0; i < 5; i++) {
@@ -596,7 +588,6 @@ describe("POST /api/open — rate limiting", () => {
     ];
     for (const c of codes10) {
       findUniqueMock.mockResolvedValueOnce(codeRowFixture({ code: c, packResult: null }));
-      findUniqueMock.mockResolvedValueOnce(codeRowFixture({ code: c, packResult: null }));
       updateManyMock.mockResolvedValueOnce({ count: 1 });
     }
     // 11th lookup for IP A — needs an active code so it reaches the IP gate.
@@ -604,9 +595,6 @@ describe("POST /api/open — rate limiting", () => {
       codeRowFixture({ code: "DEFGHJKLMNPQR234", packResult: null }),
     );
     // 1st lookup for IP B — also active, should pass through.
-    findUniqueMock.mockResolvedValueOnce(
-      codeRowFixture({ code: "EFGHJKLMNPQR2345", packResult: null }),
-    );
     findUniqueMock.mockResolvedValueOnce(
       codeRowFixture({ code: "EFGHJKLMNPQR2345", packResult: null }),
     );
@@ -635,7 +623,6 @@ describe("POST /api/open — rate limiting", () => {
     // blocked request still needs a lightweight lookup mock to reach the
     // per-code rate-limit gate.
     for (let i = 0; i < 5; i++) {
-      findUniqueMock.mockResolvedValueOnce(codeRowFixture({ packResult: null }));
       findUniqueMock.mockResolvedValueOnce(codeRowFixture({ packResult: null }));
       updateManyMock.mockResolvedValueOnce({ count: 1 });
     }
@@ -734,9 +721,7 @@ describe("POST /api/open — internal errors", () => {
   });
 
   it("updateMany throws → 500 internal, no detail leaked in body", async () => {
-    // Two findUnique calls (lightweight lookup + full row w/ prizeSet) before
-    // updateMany is reached on the first-open path.
-    findUniqueMock.mockResolvedValueOnce(codeRowFixture({ packResult: null }));
+    // One findUnique (carries prizeSet) before updateMany on the first-open path.
     findUniqueMock.mockResolvedValueOnce(codeRowFixture({ packResult: null }));
     updateManyMock.mockRejectedValueOnce(new Error("boom-update-detail"));
     const res = await POST(makeReq());

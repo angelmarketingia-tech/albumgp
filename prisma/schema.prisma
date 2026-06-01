@@ -94,7 +94,10 @@ model Redemption {
 
   code             Code          @relation(fields: [codeId], references: [id])
 
-  @@index([accountId])
+  // Composite + sorted to match the album query (`where accountId orderBy
+  // createdAt desc`): Postgres returns presorted rows from this index with no
+  // separate sort step. Covers the plain `accountId` lookup too (left prefix).
+  @@index([accountId, createdAt(sort: Desc)])
   @@index([webhookStatus])
   @@map("redemptions")
 }

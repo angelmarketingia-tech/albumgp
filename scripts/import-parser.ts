@@ -7,10 +7,11 @@
 //
 // Validation rules:
 //   - country ∈ {"SV","GT"}
-//   - code length >= 12
+//   - code matches the canonical redemption format (16 chars, [A-HJ-NP-Z2-9])
 //   - prize_set_id must be a UUID
 
 import { z } from "zod";
+import { CODE_REGEX } from "@/lib/prizes/input-schemas";
 
 export type CodeRow = {
   code: string;
@@ -31,7 +32,15 @@ export type ParseResult = {
 };
 
 export const codeRowSchema: z.ZodType<CodeRow> = z.object({
-  code: z.string().trim().min(12, "code must be at least 12 characters"),
+  // Must match the runtime redemption format EXACTLY — a code that imports but
+  // fails CODE_REGEX at /api/open would be a silently dead code in the pool.
+  // Normalize (trim + upper) before the regex so a CSV with lowercase/padded
+  // cells still imports in canonical form.
+  code: z
+    .string()
+    .trim()
+    .toUpperCase()
+    .regex(CODE_REGEX, "code must be 16 chars [A-HJ-NP-Z2-9] (no I,O,0,1)"),
   country: z.union([z.literal("SV"), z.literal("GT")]),
   prize_set_id: z.string().uuid("prize_set_id must be a UUID"),
 });

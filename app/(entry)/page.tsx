@@ -19,7 +19,11 @@ import { LEGAL_NOTICES } from "@/lib/brand/constants";
 import { normalizeCode } from "@/lib/prizes/input-schemas";
 import { ENVELOPE_TIERS, TIER_THEME } from "@/lib/prizes";
 
-export const dynamic = "force-dynamic";
+// No `force-dynamic`: the entry page has no request-time data (no headers/cookies),
+// only a server action + `searchParams.error`. Letting Next statically prerender
+// the shell keeps it edge-cacheable and lightweight per AGENTS.md §8 (the entry
+// page must be "estática/edge-cacheable y ligerísima"). Server-action POSTs
+// bypass the cache naturally; the error banner renders from searchParams on demand.
 
 interface SearchParams {
   error?: string;

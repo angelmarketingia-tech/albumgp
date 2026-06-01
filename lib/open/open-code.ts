@@ -22,7 +22,7 @@ import {
   type PackResult,
 } from "@/lib/prizes";
 import { prizeSchema, variablePoolEntrySchema } from "@/lib/prizes/schemas";
-import { keyForCode, rateLimit } from "@/lib/redis/rate-limit";
+import { keyForCode, rateLimitBatch, type RateLimitRuleInput } from "@/lib/redis/rate-limit";
 import type { ErrorCode } from "@/lib/security/response";
 
 export interface OpenSuccessBody {
@@ -119,7 +119,18 @@ export async function openCodeDirect(
         country: true,
         packResult: true,
         openedAt: true,
-        prizeSet: { select: { tier: true } },
+        // Select the FULL prizeSet here (not just tier) so the first-open path
+        // can resolve the pack without a second round-trip to the same row.
+        // Re-opens ignore these fields entirely (fast path below).
+        prizeSet: {
+          select: {
+            id: true,
+            tier: true,
+            guaranteed: true,
+            variablePool: true,
+            cardsPerPack: true,
+          },
+        },
       },
     });
   } catch (e) {
@@ -162,26 +173,25 @@ export async function openCodeDirect(
 
   const isReopen = lookup.packResult !== null && lookup.packResult !== undefined;
 
-  // Per-code limit runs on BOTH branches so an attacker can't probe an
-  // already-opened code unboundedly; re-opens get a looser cap so legitimate
-  // refreshes of /sobre/[code] don't get throttled.
-  const codeResult = await rateLimit({
-    key: keyForCode(code, "open"),
-    max: isReopen ? 20 : 5,
-    windowSeconds: 60,
-  });
-  if (!codeResult.allowed) {
-    return err(429, "rate_limited");
-  }
-
-  // Per-IP limit only on the first-open branch — re-opens are idempotent reads
-  // and an honest user hitting refresh on /sobre shouldn't trip a 60s lockout.
+  // Rate-limit rules, batched into ONE Redis round-trip:
+  //   - Per-code on BOTH branches so an attacker can't probe an already-opened
+  //     code unboundedly; re-opens get a looser cap so legitimate refreshes of
+  //     /sobre/[code] don't get throttled.
+  //   - Per-IP only on first-open — re-opens are idempotent reads and an honest
+  //     user hitting refresh shouldn't trip a 60s lockout.
+  const rules: RateLimitRuleInput[] = [
+    {
+      key: keyForCode(code, "open"),
+      max: isReopen ? 20 : 5,
+      windowSeconds: 60,
+    },
+  ];
   if (!isReopen) {
-    const ipKey = `rl:ip:open:${input.ip}`;
-    const ipResult = await rateLimit({ key: ipKey, max: 10, windowSeconds: 60 });
-    if (!ipResult.allowed) {
-      return err(429, "rate_limited");
-    }
+    rules.push({ key: `rl:ip:open:${input.ip}`, max: 10, windowSeconds: 60 });
+  }
+  const { allowed } = await rateLimitBatch(rules);
+  if (!allowed) {
+    return err(429, "rate_limited");
   }
 
   // Re-open fast path: pack_result already set on a previous successful open.
@@ -204,29 +214,20 @@ export async function openCodeDirect(
     }
   }
 
-  let codeRow;
-  try {
-    codeRow = await prisma.code.findUnique({
-      where: { code },
-      include: { prizeSet: true },
-    });
-  } catch (e) {
-    logError("open.db_lookup_failed", {
+  // First-open path. The prizeSet was already loaded in the single lookup above
+  // (no second round-trip). A missing prizeSet here is a broken FK / partial
+  // mock — fail closed with 500 rather than resolving an empty pack.
+  if (lookup.prizeSet === null || lookup.prizeSet === undefined) {
+    logError("open.prize_set_missing_on_open", {
       code_hash: codeHash,
-      message: e instanceof Error ? e.message : "unknown",
-      stack: e instanceof Error ? e.stack : undefined,
+      lookup_id: lookup.id,
     });
     return err(500, "internal");
   }
 
-  if (!codeRow) {
-    logWarn("open.rejected", { code_hash: codeHash, reason: "not_found" });
-    return err(404, "not_found_or_unavailable");
-  }
-
   let resolved: PackResult;
   try {
-    resolved = resolvePack(toPrizeSetData(codeRow.prizeSet, codeHash));
+    resolved = resolvePack(toPrizeSetData(lookup.prizeSet, codeHash));
   } catch (e) {
     logError("open.resolve_failed", {
       code_hash: codeHash,
@@ -239,10 +240,10 @@ export async function openCodeDirect(
   let writtenCount = 0;
   try {
     const result = await prisma.code.updateMany({
-      where: { id: codeRow.id, packResult: { equals: Prisma.JsonNull } },
+      where: { id: lookup.id, packResult: { equals: Prisma.JsonNull } },
       data: {
         packResult: resolved as unknown as Prisma.InputJsonValue,
-        openedAt: codeRow.openedAt ?? new Date(),
+        openedAt: lookup.openedAt ?? new Date(),
       },
     });
     writtenCount = result.count;
@@ -259,7 +260,7 @@ export async function openCodeDirect(
     let refreshed;
     try {
       refreshed = await prisma.code.findUnique({
-        where: { id: codeRow.id },
+        where: { id: lookup.id },
         select: { packResult: true, country: true, status: true, expiresAt: true },
       });
     } catch (e) {
@@ -298,6 +299,6 @@ export async function openCodeDirect(
   return {
     ok: true,
     status: 200,
-    body: { pack: resolved, country: codeRow.country, tier },
+    body: { pack: resolved, country: lookup.country, tier },
   };
 }

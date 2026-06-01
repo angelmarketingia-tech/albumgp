@@ -59,10 +59,18 @@ export async function getAlbumForAccount(
   prisma: AlbumPrismaClient,
   accountId: string,
 ): Promise<AlbumResponse> {
+  // Project only the columns the loop below reads (id for the skip-log,
+  // result, createdAt, code.country). Without this, Prisma SELECTs every
+  // Redemption column incl. webhookStatus/webhookAttempts/webhookLastError/
+  // accountId/codeId — dead bytes over the wire on every album load. At 400k
+  // users × N redemptions this is meaningful bandwidth (AGENTS.md §8).
   const rows = await prisma.redemption.findMany({
     where: { accountId },
     orderBy: { createdAt: "desc" },
-    include: {
+    select: {
+      id: true,
+      result: true,
+      createdAt: true,
       code: { select: { country: true } },
     },
   });

@@ -16,6 +16,7 @@ const config: Config = {
         // nuestra para acentos de premios destacados (ver [CONFIRMAR_DORADO_OFICIAL]).
         gp: {
           green: "#00783E",       // Verde principal — RGB 0,120,62
+          "green-core": "#008745", // Centro del gradiente de marca (AGENTS.md §2.2)
           "green-deep": "#034419", // Verde oscuro — RGB 3,68,20
           white: "#FFFFFF",
           "gray-dark-1": "#6D6E71",

@@ -148,11 +148,22 @@ describe("getAlbumForAccount — basic shape", () => {
     const call = findMany.mock.calls[0]?.[0] as {
       where: { accountId: string };
       orderBy: { createdAt: "desc" };
-      include: { code: { select: { country: true } } };
+      select: {
+        id: true;
+        result: true;
+        createdAt: true;
+        code: { select: { country: true } };
+      };
     };
     expect(call.where.accountId).toBe("mock:ffff1111ffff1111");
     expect(call.orderBy).toEqual({ createdAt: "desc" });
-    expect(call.include).toEqual({ code: { select: { country: true } } });
+    // Column projection: only the fields the shaper reads, plus the country join.
+    expect(call.select).toEqual({
+      id: true,
+      result: true,
+      createdAt: true,
+      code: { select: { country: true } },
+    });
     warnSpy.mockRestore();
   });
 

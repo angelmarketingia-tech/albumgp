@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { DM_Sans, Fraunces } from "next/font/google";
 import "./globals.css";
 
@@ -42,6 +42,32 @@ export const metadata: Metadata = {
     card: "summary_large_image",
     // images: auto-derived from app/opengraph-image.png.
   },
+  // PWA / installable-app metadata. `manifest` points at app/manifest.ts.
+  manifest: "/manifest.webmanifest",
+  applicationName: "GanaPlay Álbum",
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: "black-translucent",
+    title: "GanaPlay",
+  },
+  formatDetection: {
+    // Stop iOS Safari from auto-linking the 16-char code as a phone number.
+    telephone: false,
+  },
+};
+
+// Viewport + theme-color. `viewportFit: "cover"` lets the green background
+// bleed under the notch/home-bar so `env(safe-area-inset-*)` padding (added
+// in globals.css) can keep content clear of them. `themeColor` paints the
+// browser/standalone chrome in brand green. We allow pinch-zoom (no
+// maximum-scale lock) for accessibility; iOS input-zoom is prevented by
+// keeping input font-size >= 16px instead.
+export const viewport: Viewport = {
+  themeColor: "#00783E",
+  colorScheme: "dark",
+  width: "device-width",
+  initialScale: 1,
+  viewportFit: "cover",
 };
 
 export default function RootLayout({
@@ -53,7 +79,7 @@ export default function RootLayout({
     <html lang="es" className={`${dmSans.variable} ${fraunces.variable}`}>
       <body className="min-h-screen relative overflow-x-hidden bg-gp-radial font-sans text-gp-white antialiased">
         <a href="#main-content" className="sr-only focus:not-sr-only focus:fixed focus:top-3 focus:left-3 focus:z-[100] focus:rounded-md focus:bg-gp-gold focus:px-4 focus:py-2 focus:font-bold focus:text-gp-green-deep focus:shadow-lg focus:outline-none focus-visible:ring-2 focus-visible:ring-white">Saltar al contenido</a>
-        <div aria-hidden className="pointer-events-none fixed -top-40 -left-40 h-[480px] w-[480px] rounded-full bg-emerald-400/20 blur-3xl" />
+        <div aria-hidden className="pointer-events-none fixed -top-40 -left-40 h-[480px] w-[480px] rounded-full bg-gp-green-core/25 blur-3xl" />
         <div aria-hidden className="pointer-events-none fixed -bottom-40 -right-40 h-[520px] w-[520px] rounded-full bg-gp-gold/10 blur-3xl" />
         {children}
       </body>

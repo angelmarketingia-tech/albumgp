@@ -303,9 +303,10 @@ export function Card({
       case "legendary":
         return "bg-[linear-gradient(120deg,#B8860B_0%,#F4D03F_25%,#FFFFFF_50%,#F4D03F_75%,#B8860B_100%)] bg-[length:200%_100%] animate-shimmer p-[2px]";
       case "epic":
-        return "bg-[conic-gradient(from_0deg,#7C3AED,#A78BFA,#7C3AED)] p-[2px]";
+        // [CONFIRMAR_EPIC_COLOR] #5A3E9F — single source of truth (tiers.ts).
+        return "bg-[conic-gradient(from_0deg,#5A3E9F,#8B7AC2,#5A3E9F)] p-[2px]";
       case "rare":
-        return "bg-gradient-to-br from-gp-green to-emerald-400 p-[2px]";
+        return "bg-gradient-to-br from-gp-green to-gp-green-core p-[2px]";
       case "common":
       default:
         return "border border-gp-green";

@@ -189,7 +189,7 @@ export default async function AlbumPage({
             className="h-2 w-full rounded-full bg-white/10"
           >
             <div
-              className="h-full rounded-full bg-gradient-to-r from-emerald-400 to-gp-gold transition-all"
+              className="h-full rounded-full bg-gradient-to-r from-gp-green-core to-gp-gold transition-all"
               style={{ width: `${String(progressPct)}%` }}
             />
           </div>
@@ -262,10 +262,13 @@ export default async function AlbumPage({
         <p className="mt-1">{LEGAL_NOTICES.responsibleGaming}</p>
       </footer>
 
+      {/* FAB. Safe-area offsets keep it clear of the iOS home-bar / Android
+          gesture nav and notch-rounded corners (paired with viewportFit:cover
+          in layout.tsx). min-h 48px tap target. */}
       <Link
         href="/"
         aria-label="Abrir otro sobre"
-        className="fixed bottom-6 right-6 z-30 inline-flex items-center gap-2 rounded-full bg-[linear-gradient(135deg,#B8860B,#D4A017,#F4D03F)] px-6 py-3 font-sans font-black uppercase tracking-wide text-gp-green-deep shadow-gold-glow active:scale-[0.97] transition-transform focus:outline-none focus-visible:ring-4 focus-visible:ring-gp-white focus-visible:ring-offset-2 focus-visible:ring-offset-gp-green-deep"
+        className="fixed right-[calc(1.5rem+env(safe-area-inset-right))] bottom-[calc(1.5rem+env(safe-area-inset-bottom))] z-30 inline-flex min-h-12 items-center gap-2 rounded-full bg-[linear-gradient(135deg,#B8860B,#D4A017,#F4D03F)] px-6 py-3 font-sans font-black uppercase tracking-wide text-gp-green-deep shadow-gold-glow active:scale-[0.97] transition-transform focus:outline-none focus-visible:ring-4 focus-visible:ring-gp-white focus-visible:ring-offset-2 focus-visible:ring-offset-gp-green-deep"
       >
         Abrir otro sobre
       </Link>

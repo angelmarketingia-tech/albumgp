@@ -141,7 +141,14 @@ const redeemHandler = async (
  */
 function buildRules(req: Request, ctx: AuthedCtx): RateLimitRule[] {
   const rules: RateLimitRule[] = [
-    { key: keyForIp(req, "redeem"), max: 5, windowSeconds: 60 },
+    // Per-IP cap. 3/min (not 5) so the fixed-window 2× boundary burst tops out
+    // at ~6/min rather than ~10/min — defense-in-depth against code brute force.
+    { key: keyForIp(req, "redeem"), max: 3, windowSeconds: 60 },
+    // Per-ACCOUNT global cap across ALL codes. Without this, a botnet with N
+    // accounts on N IPs could spray N×(per-IP) redeems/min over distinct codes
+    // and drain the pre-generated pool. A real user redeems a handful of codes;
+    // 10/min is comfortably above legitimate use, far below spray throughput.
+    { key: `rl:account:redeem:${ctx.accountId}`, max: 10, windowSeconds: 60 },
   ];
   const candidate = extractCode(ctx.body);
   if (candidate !== null) {

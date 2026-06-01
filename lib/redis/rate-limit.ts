@@ -78,6 +78,63 @@ export async function rateLimit(
   return { allowed, remaining, resetAt };
 }
 
+export interface RateLimitRuleInput {
+  key: string;
+  max: number;
+  windowSeconds: number;
+}
+
+// Structural view of a pipeline that supports EVAL (Upstash). Kept local so the
+// wider surface stays confined to this hot path.
+interface RedisPipelineWithEval {
+  eval(script: string, keys: string[], args: string[]): unknown;
+  exec(): Promise<unknown[]>;
+}
+
+interface RedisWithPipeline {
+  pipeline?: () => unknown;
+}
+
+/**
+ * Evaluate several rate-limit rules in ONE Redis round-trip when the client
+ * supports pipelining + EVAL (Upstash). Returns `allowed=false` as soon as any
+ * rule's post-INCR count exceeds its `max`. Falls back to serial `rateLimit`
+ * calls only for the in-memory dev adapter (no `pipeline()`), which is local.
+ *
+ * This is the shared primitive behind both the HTTP `withRateLimit` HOF and the
+ * direct callers (e.g. `openCodeDirect`) so neither pays N sequential HTTP hops
+ * to Upstash on the hot path.
+ */
+export async function rateLimitBatch(
+  rules: ReadonlyArray<RateLimitRuleInput>,
+  redis: RedisLike = getRedis(),
+): Promise<{ allowed: boolean }> {
+  if (rules.length === 0) return { allowed: true };
+
+  const pipeFactory = (redis as RedisWithPipeline).pipeline?.bind(redis);
+  const pipe = pipeFactory ? (pipeFactory() as Partial<RedisPipelineWithEval>) : null;
+  if (pipe && typeof pipe.eval === "function" && typeof pipe.exec === "function") {
+    for (const rule of rules) {
+      pipe.eval(INCR_EXPIRE_IF_NEW, [rule.key], [String(rule.windowSeconds)]);
+    }
+    const results = await pipe.exec();
+    for (let i = 0; i < rules.length; i++) {
+      const rule = rules[i]!;
+      const raw = results[i];
+      const count = typeof raw === "number" ? raw : Number(raw);
+      if (!(count <= rule.max)) return { allowed: false };
+    }
+    return { allowed: true };
+  }
+
+  // Serial fallback (in-memory dev adapter).
+  for (const rule of rules) {
+    const res = await rateLimit(rule, redis);
+    if (!res.allowed) return { allowed: false };
+  }
+  return { allowed: true };
+}
+
 /* -------------------------------------------------------------------------- */
 /* Helpers de keys                                                            */
 /* -------------------------------------------------------------------------- */

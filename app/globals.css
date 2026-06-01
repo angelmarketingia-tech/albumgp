@@ -15,8 +15,23 @@ body {
 body {
   color: var(--gp-white);
   font-family: var(--font-gp-sans), system-ui, sans-serif;
-  background-color: #001F0C;
+  background-color: #034419;
   font-feature-settings: 'ss01', 'cv11';
+  /* Safe-area insets for notched phones (works with viewportFit: cover).
+     Pages use min-h-screen + their own px; this guarantees the green never
+     leaves content under the notch / home-bar / rounded corners. */
+  padding: env(safe-area-inset-top) env(safe-area-inset-right)
+    env(safe-area-inset-bottom) env(safe-area-inset-left);
+}
+
+/* Kill the grey tap-flash on iOS/Android for our own interactive elements;
+   we provide explicit :active / focus-visible states instead. */
+a,
+button,
+[role="button"],
+input,
+label {
+  -webkit-tap-highlight-color: transparent;
 }
 
 ::selection {
@@ -76,8 +91,10 @@ body {
 [data-card][data-rarity="rare"] > [data-card-glow] {
   box-shadow: 0 0 40px 8px rgba(0, 120, 62, 0.5), 0 0 80px 16px rgba(0, 120, 62, 0.5);
 }
+/* epic halo: [CONFIRMAR_EPIC_COLOR] #5A3E9F (rgb 90,62,159) — single source
+   of truth with RARITY_BAR_COLOR.epic in lib/prizes/tiers.ts. */
 [data-card][data-rarity="epic"] > [data-card-glow] {
-  box-shadow: 0 0 40px 8px rgba(168, 85, 247, 0.55), 0 0 80px 16px rgba(168, 85, 247, 0.55);
+  box-shadow: 0 0 40px 8px rgba(90, 62, 159, 0.55), 0 0 80px 16px rgba(90, 62, 159, 0.55);
 }
 [data-card][data-rarity="legendary"] > [data-card-glow] {
   box-shadow: 0 0 40px 8px rgba(212, 160, 23, 0.65), 0 0 80px 16px rgba(212, 160, 23, 0.65);
