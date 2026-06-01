@@ -166,9 +166,9 @@ export default async function SobrePage({
 
   const { pack, country, tier } = result.body;
   const depositUrl = DEPOSIT_URLS[country];
-  // WHY internal route: /canjear handles SSO bounce + actual redeem.
-  // Sending users straight to the external signin loses the code context
-  // and breaks the product loop.
+  // WHY internal route: /canjear consume el código (un solo uso, atómico) y
+  // luego redirige al login oficial de GanaPlay. Mandar al usuario directo al
+  // signin externo se saltearía el consumo del código y rompería el anti-reuso.
   const redeemHref = `/canjear?code=${encodeURIComponent(normalized)}`;
   const theme = TIER_THEME[tier];
 
@@ -204,7 +204,7 @@ export default async function SobrePage({
         ctaSlot={
           <section className="mx-auto flex w-full max-w-sm flex-col items-center gap-3">
             <p className="text-center text-xs text-gp-white/80 sm:text-sm">
-              Iniciá sesión en tu cuenta GanaPlay para acreditar tus premios. El código solo se puede canjear una vez.
+              Tus premios ya están en tu cuenta GanaPlay. Tocá para canjear el código e iniciar sesión. El código solo se puede usar una vez.
             </p>
             <Link
               href={redeemHref}

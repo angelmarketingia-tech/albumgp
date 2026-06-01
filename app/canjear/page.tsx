@@ -1,21 +1,26 @@
-// Pantalla de confirmación + ejecución del canje (server component).
+// Pantalla de confirmación + consumo del código (server component).
 //
-// AGENTS.md §3 (canjear = tras SSO acreditar premios) + §5 (un canje por
-// código). SECURITY.md §6.5 (sesión vía Auth.js v5) + §2 (404 unificado).
+// MODO SIN-SSO (2026-06): el dev de la plataforma GanaPlay está fuera de
+// servicio, así que NO se puede pedir login OIDC dentro de esta app. Modelo de
+// negocio acordado: los premios YA están acreditados en la cuenta GanaPlay del
+// usuario desde que se generó el código y se envió por correo. Esta app es la
+// experiencia visual + el "consumo" del código (un solo uso) y luego REDIRIGE
+// al login oficial de GanaPlay, donde el usuario ya tiene sus premios.
 //
-// Sin client JS — el form usa server action. Funciona con JS deshabilitado
-// igual que con JS habilitado.
+// Flujo:
+//   1. Leer `?code=...`. Normalizar; inválido → inicio.
+//   2. Mostrar confirmación. NO se pide sesión.
+//   3. Al confirmar (server action): marcar el código `redeemed` de forma
+//      ATÓMICA (un solo uso, anti-reuso) vía `redeemCodeDirect`, sin cuenta.
+//      Se registra con accountId = EXTERNAL_REDEEMER porque no hay login.
+//   4. Éxito → redirect 307 a la URL de login oficial de GanaPlay del país del
+//      código (SIGNIN_URLS[country]). Ya-usado → misma redirección (los premios
+//      ya están del lado de GanaPlay; no perdemos nada).
 //
-// Flow:
-//   1. Leer `?code=...` del query string. Normalizar; si no es válido,
-//      mandar al inicio.
-//   2. Chequear sesión con `auth()`. Si no hay → redirect a /auth/signin
-//      con callbackUrl apuntando de vuelta a /canjear?code=...
-//   3. Render: el form server-action confirma o cancela. La server action
-//      invoca `redeemCodeDirect` directamente (sin loopback HTTP).
-//   4. Si OK → redirect /album?just_redeemed=1.
-//   5. Si la sesión expiró durante el flow (code='auth') → bounce a signin.
-//      Otros fallos → /canjear?code=...&error=1 (UI muestra mensaje genérico).
+// Sin client JS — el form usa server action; funciona con JS deshabilitado.
+//
+// AGENTS.md §3 (un canje por código) + §5 (atómico). El paso SSO se reemplaza
+// por una redirección externa hasta que el OIDC de GanaPlay vuelva.
 
 import { createHash } from "node:crypto";
 import { headers } from "next/headers";
@@ -23,14 +28,23 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { Logo } from "@/components/brand/Logo";
 import { SubmitButton } from "@/components/ui/SubmitButton";
-import { auth } from "@/lib/auth/auth-config";
 import { LegalFooter } from "@/components/legal/LegalFooter";
+import { SIGNIN_URLS } from "@/lib/brand/constants";
 import { normalizeCode } from "@/lib/prizes/input-schemas";
-import { extractClientIp } from "@/lib/redis/rate-limit";
+import {
+  extractClientIp,
+  keyForCode,
+  rateLimitBatch,
+} from "@/lib/redis/rate-limit";
 import { redeemCodeDirect } from "@/lib/redeem/redeem-code";
 import { formatCodeDisplay } from "@/lib/ui/format";
 
 export const dynamic = "force-dynamic";
+
+// Sin login, el canje no tiene una cuenta real. Usamos un identificador opaco
+// y estable para la auditoría (redemptions.account_id) que distingue estos
+// canjes "externos vía GanaPlay" de los de un futuro OIDC (prefijo `external:`).
+const EXTERNAL_REDEEMER = "external:ganaplay";
 
 interface SearchParams {
   code?: string | string[];
@@ -41,8 +55,6 @@ function readCode(raw: SearchParams["code"]): string | null {
   if (typeof raw !== "string") {
     return null;
   }
-  // Malformed percent-escapes (e.g. ?code=%E0) throw URIError; treat them as
-  // an invalid code rather than crashing the page with a 500.
   let decoded: string;
   try {
     decoded = decodeURIComponent(raw);
@@ -56,16 +68,13 @@ function hashCode(code: string): string {
   return createHash("sha256").update(code, "utf8").digest("hex");
 }
 
-// Server actions don't have a Request object; synthesize one with the
-// forwarded headers so `extractClientIp` applies the same sanitization +
-// UA-hash fallback used by every other entry point.
 function ipFromHeaders(h: Headers): string {
   return extractClientIp(new Request("http://internal/redeem-action", { headers: h }));
 }
 
 /**
- * Server action: ejecuta el canje directamente vía `redeemCodeDirect` para
- * evitar el round-trip HTTP a /api/redeem (que requería reenviar cookies).
+ * Server action: consume el código (un solo uso) y redirige al login oficial
+ * de GanaPlay del país correspondiente. NO requiere sesión.
  */
 async function redeemAction(formData: FormData): Promise<void> {
   "use server";
@@ -78,20 +87,26 @@ async function redeemAction(formData: FormData): Promise<void> {
     return redirect("/");
   }
 
-  const session = await auth();
-  if (!session || !session.user || typeof session.user.id !== "string") {
-    const callback = `/canjear?code=${encodeURIComponent(code)}`;
-    return redirect(`/auth/signin?callbackUrl=${encodeURIComponent(callback)}`);
-  }
-
   const h = headers();
   const ip = ipFromHeaders(h);
+
+  // Rate-limit BEFORE touching the DB. Without SSO there's no account bucket,
+  // so we throttle by IP (5/min) + by code (3/min) to blunt brute-force of the
+  // pre-generated code pool. Server actions already carry Next's same-origin
+  // CSRF protection, so IP + code is the missing layer vs the /api/redeem path.
+  const { allowed } = await rateLimitBatch([
+    { key: `rl:ip:canjear:${ip}`, max: 5, windowSeconds: 60 },
+    { key: keyForCode(code, "canjear"), max: 3, windowSeconds: 60 },
+  ]);
+  if (!allowed) {
+    return redirect(`/canjear?code=${encodeURIComponent(code)}&error=rate`);
+  }
 
   let result: Awaited<ReturnType<typeof redeemCodeDirect>>;
   try {
     result = await redeemCodeDirect({
       code,
-      accountId: session.user.id,
+      accountId: EXTERNAL_REDEEMER,
       ip,
     });
   } catch (err) {
@@ -106,45 +121,45 @@ async function redeemAction(formData: FormData): Promise<void> {
     return redirect(`/canjear?code=${encodeURIComponent(code)}&error=1`);
   }
 
+  // Éxito → el código quedó consumido. Redirigimos a la ruta INTERNA `/ir/...`
+  // (no directo a la URL externa: `redirect()` a un dominio externo desde un
+  // server action no produce navegación del lado del cliente). `/ir/<destino>`
+  // responde un 307 HTTP que el navegador y el WebView sí siguen.
   if (result.ok) {
-    return redirect("/album?just_redeemed=1");
+    const dest = result.redemption.country === "SV" ? "signin-sv" : "signin-gt";
+    return redirect(`/ir/${dest}`);
   }
 
-  if (result.code === "auth" || result.status === 401) {
-    const callback = `/canjear?code=${encodeURIComponent(code)}`;
-    return redirect(`/auth/signin?callbackUrl=${encodeURIComponent(callback)}`);
+  // Código ya usado: los premios igual están del lado de GanaPlay. No sabemos
+  // el país (el canje previo no nos lo devuelve acá), así que mostramos el
+  // aviso y dejamos que el usuario elija su país para ir a GanaPlay.
+  if (result.code === "already") {
+    return redirect(`/canjear?code=${encodeURIComponent(code)}&error=used`);
   }
 
   return redirect(`/canjear?code=${encodeURIComponent(code)}&error=1`);
 }
 
-export default async function CanjearPage({
+export default function CanjearPage({
   searchParams,
 }: {
   searchParams: SearchParams;
-}): Promise<JSX.Element> {
+}): JSX.Element {
   const code = readCode(searchParams.code);
   if (code === null) {
     return redirect("/");
   }
 
-  // Auth check BEFORE any JSX render and outside any Suspense boundary —
-  // anonymous users must get an immediate 307 to /auth/signin instead of
-  // ever seeing the "Preparando..." fallback.
-  const session = await auth();
-  if (!session || !session.user || typeof session.user.id !== "string") {
-    const callback = `/canjear?code=${encodeURIComponent(code)}`;
-    return redirect(`/auth/signin?callbackUrl=${encodeURIComponent(callback)}`);
-  }
-
-  const showError = searchParams.error === "1";
+  const showGenericError = searchParams.error === "1";
+  const showAlreadyUsed = searchParams.error === "used";
+  const showRateLimited = searchParams.error === "rate";
 
   return (
     <main id="main-content" className="mx-auto flex min-h-screen max-w-md flex-col gap-6 px-5 pb-8 pt-8">
       <header className="flex flex-col items-center gap-3 text-center">
         <Logo variant="blanco" width={140} />
         <h1 className="font-display text-2xl font-bold text-white">
-          Confirmar canje
+          Canjear premios
         </h1>
       </header>
 
@@ -156,24 +171,62 @@ export default async function CanjearPage({
       </section>
 
       <p className="text-sm text-white/80">
-        Una vez canjeado, los premios se acreditarán a tu cuenta GanaPlay.
-        El código no podrá usarse de nuevo.
+        Tus premios ya están en tu cuenta de GanaPlay. Al confirmar, te llevamos
+        a iniciar sesión para que los uses. El código no podrá usarse de nuevo.
       </p>
 
-      {showError ? (
+      {showGenericError ? (
         <div role="alert" className="flex items-start gap-2 rounded-lg border border-red-400/30 bg-red-500/10 p-3 text-sm text-red-200">
           <span aria-hidden>⚠</span>
           <div>
-            <p className="font-bold">No pudimos acreditar tus premios</p>
-            <p className="mt-1 text-red-100/90">Puede ser que el código ya se haya canjeado o que la conexión fallara. Probá de nuevo en unos segundos.</p>
+            <p className="font-bold">No pudimos completar el canje</p>
+            <p className="mt-1 text-red-100/90">Probá de nuevo en unos segundos.</p>
           </div>
         </div>
       ) : null}
 
-      <form action={redeemAction} className="flex flex-col gap-3">
-        <input type="hidden" name="code" value={code} />
-        <SubmitButton idleLabel="Confirmar y acreditar premios" busyLabel="Acreditando…" />
-      </form>
+      {showRateLimited ? (
+        <div role="alert" className="flex items-start gap-2 rounded-lg border border-red-400/30 bg-red-500/10 p-3 text-sm text-red-200">
+          <span aria-hidden>⚠</span>
+          <div>
+            <p className="font-bold">Demasiados intentos</p>
+            <p className="mt-1 text-red-100/90">Esperá un minuto antes de volver a intentarlo.</p>
+          </div>
+        </div>
+      ) : null}
+
+      {showAlreadyUsed ? (
+        <div role="alert" className="flex flex-col gap-3 rounded-lg border border-gp-gold/40 bg-gp-green-deep/60 p-4 text-sm text-white">
+          <div className="flex items-start gap-2">
+            <span aria-hidden>ℹ</span>
+            <div>
+              <p className="font-bold text-gp-gold">Este código ya fue canjeado</p>
+              <p className="mt-1 text-white/85">Tus premios ya están en tu cuenta de GanaPlay. Iniciá sesión para usarlos.</p>
+            </div>
+          </div>
+          <div className="flex gap-2">
+            <a
+              href={SIGNIN_URLS.SV}
+              className="flex-1 rounded-md bg-gp-white px-3 py-2 text-center text-sm font-bold text-gp-green"
+            >
+              Entrar 🇸🇻 SV
+            </a>
+            <a
+              href={SIGNIN_URLS.GT}
+              className="flex-1 rounded-md bg-gp-white px-3 py-2 text-center text-sm font-bold text-gp-green"
+            >
+              Entrar 🇬🇹 GT
+            </a>
+          </div>
+        </div>
+      ) : null}
+
+      {!showAlreadyUsed ? (
+        <form action={redeemAction} className="flex flex-col gap-3">
+          <input type="hidden" name="code" value={code} />
+          <SubmitButton idleLabel="Confirmar e ir a GanaPlay" busyLabel="Canjeando…" />
+        </form>
+      ) : null}
 
       <Link
         href={`/sobre/${encodeURIComponent(code)}`}
