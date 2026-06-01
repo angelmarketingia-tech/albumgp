@@ -159,8 +159,12 @@ function EnvelopeOpenTrigger({
   const theme = tier !== undefined ? TIER_THEME[tier] : null;
   const accentHex = theme?.accentHex ?? "#D4A017";
 
+  // w-64 (256px) on the smallest phones (320px → 32px margin per side after the
+  // parent px-4) scaling up to sm:w-80. `will-change-transform` promotes the
+  // breathing card to its own GPU layer so the 6s loop doesn't repaint siblings
+  // on low-end Androids. Focus ring uses brand green-core (was off-brand emerald).
   const className =
-    "group relative w-72 h-96 sm:w-80 sm:h-[28rem] rounded-2xl overflow-hidden cursor-pointer outline-none animate-envelope-breathe transition-transform duration-150 ease-out hover:scale-[1.02] active:scale-[0.96] focus-visible:ring-4 focus-visible:ring-emerald-300 focus-visible:ring-offset-2 focus-visible:ring-offset-gp-green-deep";
+    "group relative w-64 h-80 sm:w-80 sm:h-[28rem] rounded-2xl overflow-hidden cursor-pointer outline-none animate-envelope-breathe [will-change:transform] transition-transform duration-150 ease-out hover:scale-[1.02] active:scale-[0.96] focus-visible:ring-4 focus-visible:ring-gp-green-core focus-visible:ring-offset-2 focus-visible:ring-offset-gp-green-deep";
 
   // Glow exterior tinted por tier — vive afuera de la imagen para evitar
   // overlap con el borde del sobre real.

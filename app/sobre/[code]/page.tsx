@@ -17,12 +17,10 @@ import Link from "next/link";
 import { headers } from "next/headers";
 import { notFound, redirect } from "next/navigation";
 import { Logo } from "@/components/brand/Logo";
+import { LegalFooter } from "@/components/legal/LegalFooter";
 import { EnvelopeBackground } from "@/components/envelope/EnvelopeBackground";
 import { EnvelopeFlow } from "@/components/envelope/EnvelopeFlow";
-import {
-  DEPOSIT_URLS,
-  LEGAL_NOTICES,
-} from "@/lib/brand/constants";
+import { DEPOSIT_URLS } from "@/lib/brand/constants";
 import { prisma } from "@/lib/db/client";
 import { openCodeDirect } from "@/lib/open/open-code";
 import {
@@ -161,10 +159,7 @@ export default async function SobrePage({
         >
           Volver a inicio
         </Link>
-        <footer className="mt-4 text-center text-xs text-white/70">
-          <p>{LEGAL_NOTICES.ageGate}</p>
-          <p className="mt-1">{LEGAL_NOTICES.responsibleGaming}</p>
-        </footer>
+        <LegalFooter className="mt-4" />
       </main>
     );
   }

@@ -31,27 +31,30 @@ export default function manifest(): MetadataRoute.Manifest {
     lang: "es",
     dir: "ltr",
     categories: ["entertainment", "games", "lifestyle"],
+    // Icons are generated programmatically from the brand isotipo via next/og
+    // (see app/icons/*/route.tsx). Real PNGs, brand-correct, no external tooling.
+    // Owner can later drop final hand-crafted art at the same paths if desired.
     icons: [
       {
-        src: "/icons/icon-192.png",
+        src: "/icons/icon-192",
         sizes: "192x192",
         type: "image/png",
         purpose: "any",
       },
       {
-        src: "/icons/icon-512.png",
+        src: "/icons/icon-512",
         sizes: "512x512",
         type: "image/png",
         purpose: "any",
       },
       {
-        src: "/icons/icon-maskable-192.png",
+        src: "/icons/icon-maskable-192",
         sizes: "192x192",
         type: "image/png",
         purpose: "maskable",
       },
       {
-        src: "/icons/icon-maskable-512.png",
+        src: "/icons/icon-maskable-512",
         sizes: "512x512",
         type: "image/png",
         purpose: "maskable",

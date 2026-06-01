@@ -15,12 +15,16 @@
  *
  * En dev/test mantenemos `'unsafe-inline'` en `script-src` porque Next dev,
  * HMR y React Refresh inyectan scripts inline. En producción se elimina para
- * cerrar el principal vector de XSS; `style-src` mantiene `'unsafe-inline'`
- * temporalmente porque framer-motion inyecta estilos inline en runtime.
+ * cerrar el principal vector de XSS.
  *
- * TODO(launch-blocker, seguridad/fase-prod): migrar a CSP estricta con nonces
- * por request — middleware que genere un nonce, lo propague a `<Script>` y a
- * los `<style>` críticos, y emita `Content-Security-Policy` dinámica. Ref:
+ * `style-src` mantiene `'unsafe-inline'` porque la UI usa atributos `style={{}}`
+ * de React en runtime (barras de progreso, halos por rareza, delays, gradientes
+ * dinámicos). NO es por framer-motion (la app no lo usa; animaciones = CSS puro).
+ * Quitar `'unsafe-inline'` de style-src rompería esos estilos inline.
+ *
+ * TODO(seguridad/fase-prod, NO bloqueante): para una CSP estricta de estilos,
+ * migrar los `style={{}}` restantes a clases/CSS-vars y usar nonces por request
+ * vía middleware. Ref:
  * https://nextjs.org/docs/app/building-your-application/configuring/content-security-policy
  */
 const IS_PROD: boolean = process.env.NODE_ENV === "production";

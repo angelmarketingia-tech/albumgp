@@ -1,4 +1,5 @@
 import type { JSX, ReactNode } from "react";
+import Link from "next/link";
 
 import { Logo } from "@/components/brand/Logo";
 import { GANAPLAY_SLOGAN, LEGAL_NOTICES } from "@/lib/brand/constants";
@@ -50,6 +51,14 @@ export function EnvelopeBackground({
           ·
         </span>
         <span>{LEGAL_NOTICES.responsibleGaming}</span>
+        <span className="mt-2 flex justify-center gap-4 normal-case tracking-normal">
+          <Link href="/privacidad" className="underline hover:text-gp-gold">
+            Privacidad
+          </Link>
+          <Link href="/terminos" className="underline hover:text-gp-gold">
+            Términos
+          </Link>
+        </span>
       </footer>
     </div>
   );

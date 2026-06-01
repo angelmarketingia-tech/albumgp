@@ -31,7 +31,6 @@ import type { RedemptionWebhookPayload } from "@/lib/webhook/types";
 type WaitUntilFn = (promise: Promise<unknown>) => void;
 const waitUntil: WaitUntilFn = (() => {
   try {
-    // eslint-disable-next-line @typescript-eslint/no-var-requires, @typescript-eslint/no-require-imports
     const mod = require("@vercel/functions") as { waitUntil?: WaitUntilFn };
     if (typeof mod.waitUntil === "function") return mod.waitUntil;
   } catch {

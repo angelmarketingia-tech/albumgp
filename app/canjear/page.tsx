@@ -24,7 +24,7 @@ import { redirect } from "next/navigation";
 import { Logo } from "@/components/brand/Logo";
 import { SubmitButton } from "@/components/ui/SubmitButton";
 import { auth } from "@/lib/auth/auth-config";
-import { LEGAL_NOTICES } from "@/lib/brand/constants";
+import { LegalFooter } from "@/components/legal/LegalFooter";
 import { normalizeCode } from "@/lib/prizes/input-schemas";
 import { extractClientIp } from "@/lib/redis/rate-limit";
 import { redeemCodeDirect } from "@/lib/redeem/redeem-code";
@@ -189,10 +189,7 @@ export default async function CanjearPage({
         </Link>
       </p>
 
-      <footer className="mt-auto pt-6 text-center text-xs text-white/70">
-        <p>{LEGAL_NOTICES.ageGate}</p>
-        <p className="mt-1">{LEGAL_NOTICES.responsibleGaming}</p>
-      </footer>
+      <LegalFooter className="mt-auto pt-6" />
     </main>
   );
 }

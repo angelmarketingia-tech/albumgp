@@ -134,9 +134,12 @@ export default function SignInPage({
                 name="email"
                 type="email"
                 required
+                inputMode="email"
                 placeholder="ejemplo@correo.com"
                 autoComplete="username"
-                className="h-12 rounded-xl bg-black/30 border border-white/20 px-4 text-white placeholder:text-white/40 focus:border-gp-gold focus:ring-2 focus:ring-gp-gold/30 outline-none transition"
+                /* text-base (16px) prevents iOS Safari from zooming the viewport
+                   on focus. min-h ensures a 48px touch target. */
+                className="h-12 min-h-12 rounded-xl bg-black/30 border border-white/20 px-4 text-base text-white placeholder:text-white/40 focus:border-gp-gold focus:ring-2 focus:ring-gp-gold/30 outline-none transition"
               />
             </div>
 
@@ -150,7 +153,8 @@ export default function SignInPage({
                 type="password"
                 required
                 autoComplete="current-password"
-                className="h-12 rounded-xl bg-black/30 border border-white/20 px-4 text-white placeholder:text-white/40 focus:border-gp-gold focus:ring-2 focus:ring-gp-gold/30 outline-none transition"
+                /* text-base (16px) prevents iOS Safari focus-zoom; min-h 48px. */
+                className="h-12 min-h-12 rounded-xl bg-black/30 border border-white/20 px-4 text-base text-white placeholder:text-white/40 focus:border-gp-gold focus:ring-2 focus:ring-gp-gold/30 outline-none transition"
               />
             </div>
 

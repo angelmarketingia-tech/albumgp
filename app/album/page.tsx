@@ -25,7 +25,7 @@ import { AlbumSummary } from "@/components/album/AlbumSummary";
 import { RarityShelf } from "@/components/album/RarityShelf";
 import { auth } from "@/lib/auth/auth-config";
 import { prisma } from "@/lib/db/client";
-import { LEGAL_NOTICES } from "@/lib/brand/constants";
+import { LegalFooter } from "@/components/legal/LegalFooter";
 import { getAlbumForAccount } from "@/lib/album";
 import { groupAlbumByRarity, categorizePrize } from "@/lib/album/group";
 import type {
@@ -257,10 +257,7 @@ export default async function AlbumPage({
         </>
       )}
 
-      <footer className="mt-auto pt-6 text-center text-xs text-white/85">
-        <p>{LEGAL_NOTICES.ageGate}</p>
-        <p className="mt-1">{LEGAL_NOTICES.responsibleGaming}</p>
-      </footer>
+      <LegalFooter className="mt-auto pt-6" />
 
       {/* FAB. Safe-area offsets keep it clear of the iOS home-bar / Android
           gesture nav and notch-rounded corners (paired with viewportFit:cover

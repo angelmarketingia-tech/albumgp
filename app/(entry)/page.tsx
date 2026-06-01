@@ -15,7 +15,7 @@ import { redirect } from "next/navigation";
 import { Logo } from "@/components/brand/Logo";
 import { CodeInput } from "@/components/ui/CodeInput";
 import { SubmitButton } from "@/components/ui/SubmitButton";
-import { LEGAL_NOTICES } from "@/lib/brand/constants";
+import { LegalFooter } from "@/components/legal/LegalFooter";
 import { normalizeCode } from "@/lib/prizes/input-schemas";
 import { ENVELOPE_TIERS, TIER_THEME } from "@/lib/prizes";
 
@@ -120,13 +120,19 @@ export default function EntryPage({
           <CodeInput
             name="code"
             id="code-input"
-            autoComplete="one-time-code"
+            /* Not an SMS OTP — `off` avoids iOS surfacing an irrelevant code
+               suggestion. autoCapitalize/spellCheck tuned for an all-caps,
+               dictionary-less code. text-xl (>16px) avoids focus-zoom. */
+            autoComplete="off"
+            autoCapitalize="characters"
+            autoCorrect="off"
+            spellCheck={false}
             autoFocus
             required
             maxLength={16}
             placeholder="Pegá tu código aquí"
             aria-describedby="code-help"
-            className="h-14 rounded-xl bg-black/30 border border-white/20 text-white placeholder:text-white/40 text-center font-mono text-xl tracking-[0.4em] focus:border-gp-gold focus:ring-2 focus:ring-gp-gold/30 outline-none"
+            className="h-14 min-h-14 rounded-xl bg-black/30 border border-white/20 text-white placeholder:text-white/40 text-center font-mono text-xl tracking-[0.4em] focus:border-gp-gold focus:ring-2 focus:ring-gp-gold/30 outline-none"
           />
           <p id="code-help" className="text-[11px] text-white/85">
             16 caracteres. Letras y números, sin I, O, 0 ni 1.
@@ -187,10 +193,7 @@ export default function EntryPage({
         </p>
       </section>
 
-      <footer className="mt-auto pt-10 text-center text-xs text-white/85">
-        <p>{LEGAL_NOTICES.ageGate}</p>
-        <p className="mt-1">{LEGAL_NOTICES.responsibleGaming}</p>
-      </footer>
+      <LegalFooter />
     </main>
   );
 }

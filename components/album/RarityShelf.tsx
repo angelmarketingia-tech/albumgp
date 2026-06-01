@@ -98,7 +98,7 @@ export function RarityShelf({ rarity, slots }: RarityShelfProps): JSX.Element | 
           {slots.length}
         </span>
       </header>
-      <div className="grid grid-cols-3 gap-2 md:grid-cols-4">
+      <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 md:grid-cols-4">
         {slots.map((slot) => (
           <CollectibleTile key={slot.collectible_id} slot={slot} />
         ))}

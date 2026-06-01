@@ -56,6 +56,42 @@ label {
   letter-spacing: -0.02em;
 }
 
+/* Readable prose for the legal documents (/privacidad, /terminos). Scoped so
+   it never bleeds into product UI. */
+.legal-prose {
+  color: rgba(255, 255, 255, 0.85);
+  font-size: 0.95rem;
+  line-height: 1.65;
+}
+.legal-prose h2 {
+  color: #fff;
+  font-weight: 700;
+  font-size: 1.1rem;
+  margin-top: 1.75rem;
+  margin-bottom: 0.5rem;
+}
+.legal-prose h2:first-child {
+  margin-top: 0;
+}
+.legal-prose p {
+  margin-bottom: 0.85rem;
+}
+.legal-prose ul {
+  list-style: disc;
+  padding-left: 1.25rem;
+  margin-bottom: 0.85rem;
+}
+.legal-prose li {
+  margin-bottom: 0.35rem;
+}
+.legal-prose a {
+  color: #d4a017;
+  text-decoration: underline;
+}
+.legal-prose strong {
+  color: #fff;
+}
+
 @keyframes shimmer {
   0% { background-position: -200% 0; }
   100% { background-position: 200% 0; }
@@ -73,6 +109,14 @@ label {
 
 .animate-envelope-breathe {
   animation: envelope-breathe 6s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+/* Promote the cascading cards to their own GPU layer so 5 simultaneous
+   translateY+scale animations stay at 60fps on low-end phones (Snapdragon 680,
+   Exynos 850). animation-fill-mode keeps it lightweight; the hint is scoped to
+   the reveal list only, not every card on the page. */
+[data-pack-reveal] .animate-card-pop {
+  will-change: transform, opacity;
 }
 
 /* Staggered reveal delays for the pack cascade. Pre-defined classes

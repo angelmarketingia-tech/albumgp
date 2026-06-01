@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import { DM_Sans, Fraunces } from "next/font/google";
+import { AgeGate } from "@/components/legal/AgeGate";
 import "./globals.css";
 
 // [CONFIRMAR_TIPOGRAFIA_OFICIAL] — el Manual de Marca especifica:
@@ -76,12 +77,15 @@ export default function RootLayout({
   children: React.ReactNode;
 }): JSX.Element {
   return (
-    <html lang="es" className={`${dmSans.variable} ${fraunces.variable}`}>
+    <html lang="es" className={`${dmSans.variable} ${fraunces.variable} overflow-x-hidden`}>
       <body className="min-h-screen relative overflow-x-hidden bg-gp-radial font-sans text-gp-white antialiased">
         <a href="#main-content" className="sr-only focus:not-sr-only focus:fixed focus:top-3 focus:left-3 focus:z-[100] focus:rounded-md focus:bg-gp-gold focus:px-4 focus:py-2 focus:font-bold focus:text-gp-green-deep focus:shadow-lg focus:outline-none focus-visible:ring-2 focus-visible:ring-white">Saltar al contenido</a>
         <div aria-hidden className="pointer-events-none fixed -top-40 -left-40 h-[480px] w-[480px] rounded-full bg-gp-green-core/25 blur-3xl" />
         <div aria-hidden className="pointer-events-none fixed -bottom-40 -right-40 h-[520px] w-[520px] rounded-full bg-gp-gold/10 blur-3xl" />
         {children}
+        {/* 18+ confirmation overlay (client island; no-op when already accepted
+            or when JS is disabled — the platform age-verifies at signup). */}
+        <AgeGate />
       </body>
     </html>
   );
