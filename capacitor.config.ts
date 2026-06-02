@@ -8,14 +8,17 @@ import type { CapacitorConfig } from "@capacitor/cli";
 // LIVE deployed app from `server.url`. This is the supported pattern for
 // server-rendered Next apps wrapped in Capacitor.
 //
-// Set CAP_SERVER_URL to your production HTTPS origin at build time, e.g.
-//   CAP_SERVER_URL=https://album.ganaplay.com npx cap sync
+// Dominio de producción: album2026.ganaplay.lat (la web debe estar desplegada
+// en HTTPS ahí antes de que la app nativa funcione). Override con CAP_SERVER_URL
+// para staging/pruebas:
+//   CAP_SERVER_URL=https://staging.album.ganaplay.lat npx cap sync
 //
-// `webDir` still must point at a real folder for `cap` tooling; we ship a
-// minimal `native/www` shell (a redirect/splash) used only if server.url is
-// ever unset. See STORE_RELEASE.md for the full flow.
+// `webDir` apunta a una carpeta real para el tooling de `cap`; servimos un shell
+// mínimo `native/www` (redirect/splash) usado solo si server.url no estuviera
+// seteado. Ver STORE_RELEASE.md para el flujo completo.
 
-const serverUrl = process.env.CAP_SERVER_URL;
+const PROD_URL = "https://album2026.ganaplay.lat";
+const serverUrl = process.env.CAP_SERVER_URL ?? PROD_URL;
 
 const config: CapacitorConfig = {
   appId: "com.ganaplay.album",
@@ -23,13 +26,23 @@ const config: CapacitorConfig = {
   webDir: "native/www",
   // Brand-green background behind the webview while it loads.
   backgroundColor: "#034419",
-  server: serverUrl
-    ? {
-        url: serverUrl,
-        // HTTPS only — the app handles auth + redemption; never allow cleartext.
-        cleartext: false,
-      }
-    : undefined,
+  server: {
+    url: serverUrl,
+    // HTTPS only — la app maneja canje + redirecciones; nunca cleartext.
+    cleartext: false,
+    // Hosts que se navegan DENTRO del WebView. La app vive en ganaplay.lat y el
+    // canje redirige al login oficial en ganaplay.sv/gt — los incluimos para que
+    // el flujo SSO no expulse al usuario a un navegador externo a mitad de canje.
+    // Cualquier otro host se abre fuera (comportamiento por defecto de Capacitor).
+    allowNavigation: [
+      "album2026.ganaplay.lat",
+      "*.ganaplay.lat",
+      "ganaplay.sv",
+      "*.ganaplay.sv",
+      "ganaplay.gt",
+      "*.ganaplay.gt",
+    ],
+  },
   ios: {
     contentInset: "always",
     backgroundColor: "#034419",
