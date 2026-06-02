@@ -1,5 +1,24 @@
 apply plugin: 'com.android.application'
 
+// Firma de release. Las credenciales NUNCA se hardcodean ni se commitean: se
+// leen de android/keystore.properties (gitignoreado) o de variables de entorno.
+// El dueño genera su keystore (ver STORE_RELEASE.md §C) y crea ese archivo.
+// Si no hay credenciales, el release sale SIN firmar (no rompe el build; útil
+// para validar que compila). NUNCA subir un .aab sin firmar a Play.
+def keystorePropsFile = rootProject.file("keystore.properties")
+def releaseSigning = null
+if (keystorePropsFile.exists()) {
+    def props = new Properties()
+    keystorePropsFile.withInputStream { props.load(it) }
+    releaseSigning = props
+} else if (System.getenv("ANDROID_KEYSTORE_PATH")) {
+    releaseSigning = new Properties()
+    releaseSigning.setProperty("storeFile", System.getenv("ANDROID_KEYSTORE_PATH"))
+    releaseSigning.setProperty("storePassword", System.getenv("ANDROID_KEYSTORE_PASSWORD") ?: "")
+    releaseSigning.setProperty("keyAlias", System.getenv("ANDROID_KEY_ALIAS") ?: "")
+    releaseSigning.setProperty("keyPassword", System.getenv("ANDROID_KEY_PASSWORD") ?: "")
+}
+
 android {
     namespace "com.ganaplay.album"
     compileSdk rootProject.ext.compileSdkVersion
@@ -16,10 +35,23 @@ android {
             ignoreAssetsPattern '!.svn:!.git:!.ds_store:!*.scc:.*:!CVS:!thumbs.db:!picasa.ini:!*~'
         }
     }
+    signingConfigs {
+        if (releaseSigning != null) {
+            release {
+                storeFile file(releaseSigning.getProperty("storeFile"))
+                storePassword releaseSigning.getProperty("storePassword")
+                keyAlias releaseSigning.getProperty("keyAlias")
+                keyPassword releaseSigning.getProperty("keyPassword")
+            }
+        }
+    }
     buildTypes {
         release {
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
+            if (releaseSigning != null) {
+                signingConfig signingConfigs.release
+            }
         }
     }
 }

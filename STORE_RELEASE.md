@@ -21,17 +21,32 @@ vivo desde **`https://album2026.ganaplay.lat`**.
   marca: "GP" blanco sobre verde — reemplazables por arte final).
 - **PWA completa** (manifest, theme-color, apple-touch-icon, iconos maskable).
 - `capacitor.config.ts` con el dominio prod y el SplashScreen configurado.
+- **Toolchain Android instalado en esta PC**: JDK 17 + Android SDK (platform-34,
+  build-tools 34.0.0, platform-tools) + `local.properties`.
+- **`.aab` de release COMPILA** ✅ — `./gradlew bundleRelease` → BUILD SUCCESSFUL,
+  `app-release.aab` (3.95 MB) generado y verificado. Sale SIN firmar porque el
+  keystore lo creás vos (§C); con tu `keystore.properties` sale firmado y listo.
+- **Firma de release configurada de forma segura**: `app/build.gradle` lee las
+  credenciales de `android/keystore.properties` (gitignoreado) o de variables de
+  entorno — nunca hardcodeadas. Plantilla en `keystore.properties.example`.
 
 ## ⏳ Lo que falta (requiere TU acción — no se puede automatizar)
 
-1. **Desplegar la web** en `https://album2026.ganaplay.lat` (HTTPS). Sin esto la
+El proyecto YA compila un `.aab`. Lo único entre vos y Play Store es:
+
+1. **Generar tu keystore + `keystore.properties`** (§C) y re-compilar para tener
+   el `.aab` **firmado**. Solo vos debés tener el keystore (controla las
+   actualizaciones de la app). Comando: `cd android && ./gradlew.bat bundleRelease`.
+2. **Desplegar la web** en `https://album2026.ganaplay.lat` (HTTPS). Sin esto la
    app nativa muestra el shell de espera.
-2. **Cuenta Google Play Console** (US$25, pago único) — ver §A.
-3. **Generar tu keystore** y firmar el `.aab` — ver §C. (Debe hacerlo el dueño:
-   quien tiene el keystore controla las actualizaciones futuras de la app.)
-4. **Android Studio** instalado en alguna máquina para el build final — ver §B.
+3. **Cuenta Google Play Console** (US$25, pago único) — ver §A.
+4. Subir el `.aab` firmado a Play (§D) + completar metadata (§F) y clasificación
+   de edad/gambling.
 5. iOS: requiere una **Mac con Xcode** + **Apple Developer** (US$99/año). Apple
    no permite compilar iOS en Windows. Queda para después (ver §E).
+
+> Android Studio es opcional: con el toolchain de esta PC (JDK + SDK ya
+> instalados) el `.aab` se genera por línea de comandos (§D Opción 2).
 
 ---
 
@@ -71,21 +86,40 @@ Puede ser esta PC u otra Windows/Mac/Linux.
 
 ---
 
-## §C. Generar el keystore (una sola vez, GUARDALO)
+## §C. Generar el keystore y configurar la firma (una sola vez)
 
 El `.aab` debe ir firmado. El keystore es tu identidad de publicación: **si lo
-perdés, no podés volver a actualizar la app**. Guardalo en un lugar seguro (no
-en el repo).
+perdés, no podés volver a actualizar la app**. Guardalo seguro (NO en el repo).
+
+> 🔐 **Por qué lo generás vos y no el repo**: quien tiene el keystore controla
+> todas las actualizaciones de la app. Por eso `android/keystore.properties` y
+> `*.keystore` están **gitignoreados** — las credenciales nunca se commitean.
+
+**1) Generá el keystore** (el JDK ya está instalado: Temurin 17):
 
 ```bash
-# Con el JDK (ya instalado en esta PC: Temurin 17), corré:
-keytool -genkey -v -keystore ganaplay-album.keystore \
+keytool -genkeypair -v \
+  -keystore ganaplay-album-release.keystore \
   -alias ganaplay-album -keyalg RSA -keysize 2048 -validity 10000
-# Te pide una contraseña (anotala) y algunos datos (nombre, organización, país=SV/GT).
+# Pide una contraseña (anotala) y datos (organización GanaPlay, país SV/GT).
 ```
 
-Guardá `ganaplay-album.keystore` + la contraseña fuera del repo (gestor de
-secretos / caja fuerte del dueño).
+Guardá `ganaplay-album-release.keystore` + la contraseña en la caja fuerte del
+dueño.
+
+**2) Conectá las credenciales al build.** El `android/app/build.gradle` ya tiene
+el `signingConfig` que lee de `android/keystore.properties` (o de variables de
+entorno). Copiá la plantilla y completá:
+
+```bash
+cd android
+cp keystore.properties.example keystore.properties
+# Editá keystore.properties con la ruta del .keystore y las contraseñas.
+```
+
+`keystore.properties` está gitignoreado. Con eso, `bundleRelease` firma solo.
+(Alternativa CI: en vez del archivo, exportá `ANDROID_KEYSTORE_PATH`,
+`ANDROID_KEYSTORE_PASSWORD`, `ANDROID_KEY_ALIAS`, `ANDROID_KEY_PASSWORD`.)
 
 ---
 
@@ -97,21 +131,24 @@ secretos / caja fuerte del dueño).
 2. Seleccioná tu `ganaplay-album.keystore`, alias y contraseña.
 3. Variant **release**. Genera `android/app/release/app-release.aab`.
 
-### Opción 2 — Línea de comandos (si el SDK está configurado)
+### Opción 2 — Línea de comandos (el SDK ya está instalado en esta PC)
+
+El toolchain ya está listo en esta máquina: **JDK 17** (Temurin) + **Android SDK**
+(platform-34, build-tools 34.0.0, platform-tools) + `android/local.properties`
+apuntando al SDK. Con tu `keystore.properties` creado (§C):
 
 ```bash
-# Configurá las variables (ajustá rutas):
 export JAVA_HOME="C:/Program Files/Eclipse Adoptium/jdk-17.0.19.10-hotspot"
 export ANDROID_HOME="$LOCALAPPDATA/Android/Sdk"
-# Firma vía gradle.properties o -P flags. Luego:
 cd android
 ./gradlew.bat bundleRelease
-# Salida: android/app/build/outputs/bundle/release/app-release.aab
+# Salida FIRMADA: android/app/build/outputs/bundle/release/app-release.aab
 ```
 
-Para firmar por CLI, agregá a `android/app/build.gradle` un bloque
-`signingConfigs` que lea las credenciales de variables de entorno (NO hardcodear
-la contraseña). Android Studio (Opción 1) lo hace sin tocar archivos.
+El `signingConfig` en `app/build.gradle` ya lee tus credenciales de
+`keystore.properties` — no hay que tocar el build. **Sin** `keystore.properties`
+el `.aab` sale SIN firmar (sirve para validar que compila, pero Play lo rechaza
+hasta firmarlo).
 
 ### Subir a Play
 
