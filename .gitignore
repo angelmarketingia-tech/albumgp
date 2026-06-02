@@ -34,6 +34,12 @@ Thumbs.db
 coverage/
 .vitest-cache/
 
+# scratch / generated QA artifacts (codes are secrets — never commit)
+tmp/
+
+# vercel
+.vercel/
+
 # prisma
 prisma/dev.db
 prisma/dev.db-journal

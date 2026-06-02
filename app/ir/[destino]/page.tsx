@@ -13,6 +13,7 @@
 import { redirect } from "next/navigation";
 import { SIGNIN_URLS } from "@/lib/brand/constants";
 import { Logo } from "@/components/brand/Logo";
+import { ExternalRedirect } from "@/components/ui/ExternalRedirect";
 
 export const dynamic = "force-dynamic";
 
@@ -49,6 +50,11 @@ export default function IrPage({
           Te estamos llevando a iniciar sesión en GanaPlay {dest.pais}…
         </p>
       </div>
+      {/* Redundancia JS (CSP-safe, módulo externo): dispara location.replace y,
+          si tras ~2.5s seguimos aquí, muestra un botón pulsante. Nunca se ve
+          "trabado". */}
+      <ExternalRedirect url={dest.url} />
+      {/* Respaldo siempre visible aunque JS esté deshabilitado. */}
       <a
         href={dest.url}
         className="inline-flex h-12 min-h-12 items-center justify-center rounded-md bg-gp-white px-6 font-sans text-base font-bold uppercase tracking-wide text-gp-green shadow-md"

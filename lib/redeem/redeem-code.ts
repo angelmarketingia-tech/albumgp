@@ -22,6 +22,17 @@ import {
 } from "@/lib/prizes";
 import { sendRedemptionWebhook } from "@/lib/webhook/sender";
 import type { RedemptionWebhookPayload } from "@/lib/webhook/types";
+import { withTimeout } from "@/lib/util/timeout";
+
+// Hard per-query deadline against Postgres (Neon). A warm pooled query is
+// single-digit ms; 4000ms is huge headroom but bounds the worst case so a
+// stalled/contended DB under a 300k-user burst can't hang the serverless
+// invocation (and the "Canjeando…" spinner) until the platform kills it.
+// On timeout the surrounding try/catch returns fail(500) → the UI shows the
+// retry screen instead of spinning forever. Unlike rate-limit we do NOT
+// fail-open here: we can't confirm the atomic single-use flip, so we must
+// surface an error rather than pretend the redeem succeeded.
+const DB_TIMEOUT_MS = 4000;
 
 // Vercel-only helper: keeps the serverless invocation alive for background work
 // after the HTTP response is flushed. Loaded via guarded dynamic require so we
@@ -121,19 +132,23 @@ export async function redeemCodeDirect(
 
   let updateCount: number;
   try {
-    const result = await prisma.code.updateMany({
-      where: {
-        code,
-        status: "active",
-        OR: [{ expiresAt: null }, { expiresAt: { gt: now } }],
-      },
-      data: {
-        status: "redeemed",
-        redeemedAt: now,
-        redeemedBy: accountId,
-        redeemedIp: input.ip,
-      },
-    });
+    const result = await withTimeout(
+      prisma.code.updateMany({
+        where: {
+          code,
+          status: "active",
+          OR: [{ expiresAt: null }, { expiresAt: { gt: now } }],
+        },
+        data: {
+          status: "redeemed",
+          redeemedAt: now,
+          redeemedBy: accountId,
+          redeemedIp: input.ip,
+        },
+      }),
+      DB_TIMEOUT_MS,
+      "db.redeem.updateMany",
+    );
     updateCount = result.count;
   } catch (err) {
     logError("redeem.atomic_update_failed", {
@@ -149,10 +164,14 @@ export async function redeemCodeDirect(
     // should see success, not 404. Cross-account/different-session callers
     // still fall through to the generic 'already'.
     try {
-      const existing = await prisma.code.findUnique({
-        where: { code },
-        select: { redeemedBy: true, packResult: true, country: true },
-      });
+      const existing = await withTimeout(
+        prisma.code.findUnique({
+          where: { code },
+          select: { redeemedBy: true, packResult: true, country: true },
+        }),
+        DB_TIMEOUT_MS,
+        "db.redeem.findUnique.idempotent",
+      );
       if (
         existing?.redeemedBy === accountId &&
         existing.packResult !== null &&
@@ -195,10 +214,14 @@ export async function redeemCodeDirect(
     packResult: Prisma.JsonValue | null;
   } | null;
   try {
-    codeRow = await prisma.code.findUnique({
-      where: { code },
-      select: { id: true, country: true, packResult: true },
-    });
+    codeRow = await withTimeout(
+      prisma.code.findUnique({
+        where: { code },
+        select: { id: true, country: true, packResult: true },
+      }),
+      DB_TIMEOUT_MS,
+      "db.redeem.findUnique.reread",
+    );
   } catch (err) {
     logError("redeem.reread_failed", {
       code_hash: codeHash,
@@ -246,16 +269,20 @@ export async function redeemCodeDirect(
   let redemptionId: string;
   let redemptionCreatedAt: Date;
   try {
-    const redemption = await prisma.redemption.create({
-      data: {
-        codeId: codeRow.id,
-        accountId,
-        result: packResult as unknown as Prisma.InputJsonValue,
-        webhookStatus: "pending",
-        webhookAttempts: 0,
-      },
-      select: { id: true, createdAt: true },
-    });
+    const redemption = await withTimeout(
+      prisma.redemption.create({
+        data: {
+          codeId: codeRow.id,
+          accountId,
+          result: packResult as unknown as Prisma.InputJsonValue,
+          webhookStatus: "pending",
+          webhookAttempts: 0,
+        },
+        select: { id: true, createdAt: true },
+      }),
+      DB_TIMEOUT_MS,
+      "db.redeem.redemption.create",
+    );
     redemptionId = redemption.id;
     redemptionCreatedAt = redemption.createdAt;
   } catch (err) {

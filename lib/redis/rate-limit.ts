@@ -16,6 +16,29 @@
 
 import { createHash } from "node:crypto";
 import { getRedis, type RedisLike } from "./client";
+import { withTimeout } from "@/lib/util/timeout";
+
+// Hard deadline for any single Redis round-trip on the rate-limit hot path.
+// Upstash REST from a warm Vercel function is single-digit ms; 1500ms is ~100×
+// headroom. If Redis stalls past this (incident, throttling under 300k-user
+// burst), we MUST NOT hang the redeem — rate-limiting is a guard, not the
+// product. We fail OPEN: log it and let the request through. The atomic
+// updateMany in `redeemCodeDirect` is the real anti-reuse lock, so a brief
+// rate-limit outage can't double-spend a code — it only relaxes brute-force
+// throttling for the duration of the incident.
+const RL_TIMEOUT_MS = 1500;
+
+function logRateLimitDegraded(reason: string, detail: string): void {
+  // eslint-disable-next-line no-console
+  console.warn(
+    JSON.stringify({
+      level: "warn",
+      event: "rate_limit.degraded_fail_open",
+      reason,
+      detail,
+    }),
+  );
+}
 
 export interface RateLimitOptions {
   /** Key opaca. Debe estar pre-namespaceada (ej. `rl:ip:open:1.2.3.4`). */
@@ -62,15 +85,28 @@ export async function rateLimit(
 ): Promise<RateLimitResult> {
   const { key, max, windowSeconds } = opts;
   let count: number;
-  const maybeEval = (redis as Partial<RedisWithEval>).eval;
-  if (typeof maybeEval === "function") {
-    const res = await maybeEval.call(redis, INCR_EXPIRE_IF_NEW, [key], [String(windowSeconds)]);
-    count = typeof res === "number" ? res : Number(res);
-  } else {
-    count = await redis.incr(key);
-    if (count === 1) {
-      await redis.expire(key, windowSeconds);
+  try {
+    const maybeEval = (redis as Partial<RedisWithEval>).eval;
+    if (typeof maybeEval === "function") {
+      const res = await withTimeout(
+        maybeEval.call(redis, INCR_EXPIRE_IF_NEW, [key], [String(windowSeconds)]),
+        RL_TIMEOUT_MS,
+        "redis.rateLimit.eval",
+      );
+      count = typeof res === "number" ? res : Number(res);
+    } else {
+      count = await withTimeout(redis.incr(key), RL_TIMEOUT_MS, "redis.rateLimit.incr");
+      if (count === 1) {
+        // EXPIRE failure is non-fatal: worst case the window lingers. Best-effort.
+        await withTimeout(redis.expire(key, windowSeconds), RL_TIMEOUT_MS, "redis.rateLimit.expire").catch(
+          () => undefined,
+        );
+      }
     }
+  } catch (err) {
+    // Fail OPEN — Redis stalled/errored. Never hang or block the user path.
+    logRateLimitDegraded("rateLimit_single", err instanceof Error ? err.message : "unknown");
+    return { allowed: true, remaining: max, resetAt: Date.now() + windowSeconds * 1000 };
   }
   const allowed = count <= max;
   const remaining = Math.max(0, max - count);
@@ -114,10 +150,18 @@ export async function rateLimitBatch(
   const pipeFactory = (redis as RedisWithPipeline).pipeline?.bind(redis);
   const pipe = pipeFactory ? (pipeFactory() as Partial<RedisPipelineWithEval>) : null;
   if (pipe && typeof pipe.eval === "function" && typeof pipe.exec === "function") {
-    for (const rule of rules) {
-      pipe.eval(INCR_EXPIRE_IF_NEW, [rule.key], [String(rule.windowSeconds)]);
+    let results: unknown[];
+    try {
+      for (const rule of rules) {
+        pipe.eval(INCR_EXPIRE_IF_NEW, [rule.key], [String(rule.windowSeconds)]);
+      }
+      results = await withTimeout(pipe.exec(), RL_TIMEOUT_MS, "redis.rateLimitBatch.exec");
+    } catch (err) {
+      // Fail OPEN — one pipelined round-trip stalled/errored. Don't block the
+      // redeem; the atomic DB update is the real guard against code reuse.
+      logRateLimitDegraded("rateLimitBatch", err instanceof Error ? err.message : "unknown");
+      return { allowed: true };
     }
-    const results = await pipe.exec();
     for (let i = 0; i < rules.length; i++) {
       const rule = rules[i]!;
       const raw = results[i];
@@ -127,7 +171,7 @@ export async function rateLimitBatch(
     return { allowed: true };
   }
 
-  // Serial fallback (in-memory dev adapter).
+  // Serial fallback (in-memory dev adapter). `rateLimit` already fails open.
   for (const rule of rules) {
     const res = await rateLimit(rule, redis);
     if (!res.allowed) return { allowed: false };

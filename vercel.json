@@ -1,0 +1,15 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "regions": ["iad1"],
+  "functions": {
+    "app/canjear/page.tsx": {
+      "maxDuration": 10
+    },
+    "app/api/redeem/route.ts": {
+      "maxDuration": 10
+    },
+    "app/ir/[destino]/page.tsx": {
+      "maxDuration": 5
+    }
+  }
+}
