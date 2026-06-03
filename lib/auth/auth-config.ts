@@ -85,7 +85,8 @@ export const authConfig: NextAuthConfig = {
   // NODE_ENV is unset / 'staging' / 'preview'. Belt-and-suspenders: also keep
   // the runtime throw inside `validateMockCredentials`.
   providers:
-    process.env.NODE_ENV === "production"
+    process.env.NODE_ENV === "production" &&
+    process.env.SIMULATE_REDEEM !== "1"
       ? []
       : [
           Credentials({

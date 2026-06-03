@@ -79,7 +79,11 @@ let cachedProvider: IdentityProvider | null = null;
 export function getIdentityProvider(
   env: NodeJS.ProcessEnv = process.env,
 ): IdentityProvider {
-  if (env.NODE_ENV === "production") {
+  // DEMO/PREVIEW override: with SIMULATE_REDEEM=1 we run a no-DB preview where
+  // the real OIDC isn't wired yet. Returning the mock here (instead of throwing)
+  // lets the build collect page data and the auth'd routes respond gracefully.
+  // Production WITHOUT this flag keeps the strict fail-closed behavior below.
+  if (env.NODE_ENV === "production" && env.SIMULATE_REDEEM !== "1") {
     // Future: branch on `env.AUTH_PROVIDER === 'oidc'` and return the OIDC
     // implementation. Until then, prod must NOT silently fall back to mock.
     throw new Error("auth_config_invalid");
