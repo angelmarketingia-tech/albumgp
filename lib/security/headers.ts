@@ -29,23 +29,30 @@
  */
 const IS_PROD: boolean = process.env.NODE_ENV === "production";
 
-// ElevenLabs ConvAI widget: embed servido por unpkg; conecta por HTTPS/WSS a la
-// API de ElevenLabs, usa Web Workers (blob:) y pide micrófono. Orígenes acotados.
-const ELEVENLABS_SCRIPT = "https://unpkg.com https://*.elevenlabs.io";
-const ELEVENLABS_CONNECT =
-  "https://*.elevenlabs.io wss://*.elevenlabs.io https://unpkg.com";
+// ElevenLabs ConvAI widget. El embed (unpkg) carga código adicional desde
+// jsdelivr, conecta por HTTPS/WSS a las APIs/LiveKit de ElevenLabs, usa
+// fingerprinting anti-fraude (openfpcdn/fingerprint), fuentes de Google y
+// assets en googleapis. Habilitamos exactamente esos orígenes.
+const EL_SCRIPT =
+  "https://unpkg.com https://cdn.jsdelivr.net https://*.elevenlabs.io https://m1.openfpcdn.io https://*.fpjs.io";
+const EL_CONNECT =
+  "https://*.elevenlabs.io wss://*.elevenlabs.io https://unpkg.com https://cdn.jsdelivr.net https://m1.openfpcdn.io https://*.fpjs.io https://api.fpjs.io https://storage.googleapis.com";
+const EL_STYLE = "https://unpkg.com https://cdn.jsdelivr.net https://fonts.googleapis.com";
+const EL_FONT = "https://fonts.gstatic.com";
+const EL_IMG = "https://*.elevenlabs.io https://storage.googleapis.com";
+const EL_MEDIA = "https://*.elevenlabs.io https://storage.googleapis.com";
 
 const CSP_DIRECTIVES: ReadonlyArray<string> = [
   "default-src 'self'",
   IS_PROD
-    ? `script-src 'self' ${ELEVENLABS_SCRIPT}`
-    : `script-src 'self' 'unsafe-inline' ${ELEVENLABS_SCRIPT}`,
+    ? `script-src 'self' ${EL_SCRIPT}`
+    : `script-src 'self' 'unsafe-inline' ${EL_SCRIPT}`,
   "worker-src 'self' blob:",
-  "style-src 'self' 'unsafe-inline' https://unpkg.com",
-  "img-src 'self' data: blob: https://*.elevenlabs.io",
-  "media-src 'self' blob: https://*.elevenlabs.io",
-  "font-src 'self' data:",
-  `connect-src 'self' ${ELEVENLABS_CONNECT}`,
+  `style-src 'self' 'unsafe-inline' ${EL_STYLE}`,
+  `img-src 'self' data: blob: ${EL_IMG}`,
+  `media-src 'self' blob: ${EL_MEDIA}`,
+  `font-src 'self' data: ${EL_FONT}`,
+  `connect-src 'self' ${EL_CONNECT}`,
   "frame-ancestors 'none'",
   "base-uri 'self'",
   "form-action 'self'",

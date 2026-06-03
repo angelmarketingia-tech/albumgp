@@ -88,11 +88,15 @@ export default function RootLayout({
             or when JS is disabled — the platform age-verifies at signup). */}
         <AgeGate />
         {/* Asistente de voz ElevenLabs (ConvAI). El custom element lo monta el
-            script embebido de unpkg. La CSP en next.config.mjs habilita el
-            script-src/connect-src/etc. de ElevenLabs. */}
+            script embebido de unpkg. La CSP en next.config.mjs habilita los
+            orígenes de ElevenLabs (script/connect/worker/media/img/font).
+            Usamos el <script async> nativo recomendado por ElevenLabs en vez de
+            next/script para que el embed registre el custom element de forma
+            fiable en cliente. */}
         {/* @ts-expect-error custom element no tipado por React */}
         <elevenlabs-convai agent-id="agent_4201kt5bb5hveac8406zc2m9yfpt"></elevenlabs-convai>
         <Script
+          id="elevenlabs-convai-embed"
           src="https://unpkg.com/@elevenlabs/convai-widget-embed"
           strategy="afterInteractive"
         />
