@@ -20,9 +20,9 @@ const EL_FONT = "https://fonts.gstatic.com";
 const EL_IMG = "https://*.elevenlabs.io https://storage.googleapis.com";
 const EL_MEDIA = "https://*.elevenlabs.io https://storage.googleapis.com";
 
-const scriptSrc = isProd
-  ? `script-src 'self' ${EL_SCRIPT}`
-  : `script-src 'self' 'unsafe-inline' ${EL_SCRIPT}`;
+// 'unsafe-inline' también en prod: el embed de ElevenLabs ejecuta scripts
+// inline (el navegador los bloqueaba con 'self' a secas → el widget no montaba).
+const scriptSrc = `script-src 'self' 'unsafe-inline' ${EL_SCRIPT}`;
 
 const SECURITY_HEADERS = [
   {

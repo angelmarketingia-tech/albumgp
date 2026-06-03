@@ -44,9 +44,10 @@ const EL_MEDIA = "https://*.elevenlabs.io https://storage.googleapis.com";
 
 const CSP_DIRECTIVES: ReadonlyArray<string> = [
   "default-src 'self'",
-  IS_PROD
-    ? `script-src 'self' ${EL_SCRIPT}`
-    : `script-src 'self' 'unsafe-inline' ${EL_SCRIPT}`,
+  // 'unsafe-inline' también en prod: el embed de ElevenLabs ejecuta scripts
+  // inline (el navegador los bloqueaba con 'self' a secas → el widget no
+  // montaba). Trade-off de seguridad aceptado para habilitar el asistente.
+  `script-src 'self' 'unsafe-inline' ${EL_SCRIPT}`,
   "worker-src 'self' blob:",
   `style-src 'self' 'unsafe-inline' ${EL_STYLE}`,
   `img-src 'self' data: blob: ${EL_IMG}`,
