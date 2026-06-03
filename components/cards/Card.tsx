@@ -84,6 +84,36 @@ const LABEL_TEXT_CLS: Record<CardSize, string> = {
   lg: "text-sm",
 };
 
+/**
+ * Carta con imagen promocional full-bleed. Reusable para premios garantizados
+ * (sports_credit / casino_spins / deposit_match) que traen `image_url`. La
+ * imagen cubre toda la cara; un degradado inferior mantiene legible el label.
+ */
+function PromoImageCard({
+  imageUrl,
+  label,
+  size,
+  priority,
+}: {
+  imageUrl: string;
+  label: string;
+  size: CardSize;
+  priority: boolean;
+}): JSX.Element {
+  return (
+    <div className="relative h-full w-full overflow-hidden rounded-[7px]">
+      <Image
+        src={imageUrl}
+        alt={label}
+        fill
+        sizes={`${SIZE_PX[size]}px`}
+        priority={priority}
+        className="object-cover"
+      />
+    </div>
+  );
+}
+
 function CardFrontContent({
   prize,
   size,
@@ -93,6 +123,24 @@ function CardFrontContent({
   size: CardSize;
   priority: boolean;
 }): JSX.Element {
+  // Premios garantizados con imagen promocional → la mostramos full-bleed en
+  // lugar del diseño genérico (ícono + monto + label).
+  if (
+    (prize.type === "sports_credit" ||
+      prize.type === "casino_spins" ||
+      prize.type === "deposit_match") &&
+    prize.image_url !== undefined
+  ) {
+    return (
+      <PromoImageCard
+        imageUrl={prize.image_url}
+        label={prize.label}
+        size={size}
+        priority={priority}
+      />
+    );
+  }
+
   switch (prize.type) {
     case "sports_credit":
       return (

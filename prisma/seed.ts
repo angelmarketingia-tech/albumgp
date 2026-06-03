@@ -21,7 +21,13 @@ import {
   prizeSchema,
   variablePoolEntrySchema,
 } from "../lib/prizes/schemas";
-import type { Prize, VariablePoolEntry } from "../lib/prizes/types";
+import type {
+  Prize,
+  VariablePoolEntry,
+  SportsCreditPrize,
+  CasinoSpinsPrize,
+  DepositMatchPrize,
+} from "../lib/prizes/types";
 
 const prisma = new PrismaClient();
 
@@ -44,28 +50,28 @@ const PRIZE_SET_IDS = {
 
 // ---------- Catálogo de premios reutilizables --------------------------------
 
-const giros = (count: number, game: string): Prize => ({
+const giros = (count: number, game: string): CasinoSpinsPrize => ({
   type: "casino_spins",
   count,
   game_name: game,
   label: `${count} giros gratis en ${game}`,
 });
 
-const freeBetUSD = (amount: number): Prize => ({
+const freeBetUSD = (amount: number): SportsCreditPrize => ({
   type: "sports_credit",
   amount,
   currency: "USD",
   label: `$${amount} USD en free bets para apostar`,
 });
 
-const freeBetGTQ = (amount: number): Prize => ({
+const freeBetGTQ = (amount: number): SportsCreditPrize => ({
   type: "sports_credit",
   amount,
   currency: "GTQ",
   label: `Q${amount} en free bets para apostar`,
 });
 
-const depositMatch = (mul: number, extras?: string): Prize => {
+const depositMatch = (mul: number, extras?: string): DepositMatchPrize => {
   const base =
     mul === 2
       ? "2× tu primer depósito"
@@ -255,16 +261,32 @@ const poolPlatinoGT = (): VariablePoolEntry[] => [
 // coleccionables. Así el sobre del Mundial le da al usuario el mismo bono
 // que ya conoce de la plataforma + la sorpresa de los premios extra.
 
+// Imágenes promocionales de las cartas garantizadas (mismas rutas que el
+// simulador, lib/open/simulate-open.ts). Guardá los archivos en
+// public/assets/cartas/premios/ con estos nombres.
+const PROMO_IMG = {
+  SV: {
+    freebet: "/assets/cartas/premios/sv-freebet-10.webp",
+    giros: "/assets/cartas/premios/sv-giros-200.webp",
+    deposito: "/assets/cartas/premios/sv-deposito-3x.webp",
+  },
+  GT: {
+    freebet: "/assets/cartas/premios/gt-freebet-100.webp",
+    giros: "/assets/cartas/premios/gt-giros-200.webp",
+    deposito: "/assets/cartas/premios/gt-deposito-3x.webp",
+  },
+} as const;
+
 const guaranteedSV: Prize[] = [
-  freeBetUSD(10),
-  giros(200, "Clover Super Pot"),
-  depositMatch(3, "giros gratis"),
+  { ...freeBetUSD(10), image_url: PROMO_IMG.SV.freebet },
+  { ...giros(200, "Clover Super Pot"), image_url: PROMO_IMG.SV.giros },
+  { ...depositMatch(3, "giros gratis"), image_url: PROMO_IMG.SV.deposito },
 ];
 
 const guaranteedGT: Prize[] = [
-  freeBetGTQ(100),
-  giros(200, "Super Tiki Strike"),
-  depositMatch(3, "giros gratis"),
+  { ...freeBetGTQ(100), image_url: PROMO_IMG.GT.freebet },
+  { ...giros(200, "Super Tiki Strike"), image_url: PROMO_IMG.GT.giros },
+  { ...depositMatch(3, "giros gratis"), image_url: PROMO_IMG.GT.deposito },
 ];
 
 // ---------- Validación + persistencia ----------------------------------------

@@ -18,11 +18,27 @@ export const envelopeTierSchema: z.ZodType<EnvelopeTier> = z.enum([
 
 const currencySchema = z.union([z.literal("USD"), z.literal("GTQ")]);
 
+// `image_url` accepts:
+//   - Absolute URL (http(s)://...) — for CDN-hosted artwork.
+//   - Root-relative path (/assets/cartas/...) — for files served by
+//     Next.js out of /public/. This is the canonical form for the MVP.
+// We deliberately do NOT accept bare relative paths (`assets/x.png`),
+// protocol-relative URLs (`//foo`), `data:` URIs, or anything that would
+// confuse `next/image`. Shared by the guaranteed prizes + collectibles.
+const imageUrlSchema = z
+  .string()
+  .min(1)
+  .refine(
+    (s) => s.startsWith("/") || /^https?:\/\//.test(s),
+    "image_url must be an absolute URL or a root-relative path",
+  );
+
 export const sportsCreditPrizeSchema = z.object({
   type: z.literal("sports_credit"),
   amount: z.number().positive(),
   currency: currencySchema,
   label: z.string().min(1),
+  image_url: imageUrlSchema.optional(),
 });
 
 export const casinoSpinsPrizeSchema = z.object({
@@ -30,6 +46,7 @@ export const casinoSpinsPrizeSchema = z.object({
   count: z.number().int().positive(),
   game_name: z.string().min(1),
   label: z.string().min(1),
+  image_url: imageUrlSchema.optional(),
 });
 
 export const depositMatchPrizeSchema = z.object({
@@ -37,6 +54,7 @@ export const depositMatchPrizeSchema = z.object({
   multiplier: z.number().positive(),
   extras: z.string().min(1).optional(),
   label: z.string().min(1),
+  image_url: imageUrlSchema.optional(),
 });
 
 export const physicalPrizeSchema = z.object({
@@ -63,21 +81,6 @@ export const externalCodePrizeSchema = z.object({
 // `collectible_id` must be lowercase kebab-style: [a-z0-9-] so it travels
 // safely through JSON, URLs and DOM ids without escaping or collision risk.
 export const COLLECTIBLE_ID_REGEX = /^[a-z0-9-]+$/;
-
-// `image_url` accepts:
-//   - Absolute URL (http(s)://...) — for CDN-hosted artwork.
-//   - Root-relative path (/assets/cartas/...) — for files served by
-//     Next.js out of /public/. This is the canonical form for the MVP.
-// We deliberately do NOT accept bare relative paths (`assets/x.png`),
-// protocol-relative URLs (`//foo`), `data:` URIs, or anything that would
-// confuse `next/image`.
-const imageUrlSchema = z
-  .string()
-  .min(1)
-  .refine(
-    (s) => s.startsWith("/") || /^https?:\/\//.test(s),
-    "image_url must be an absolute URL or a root-relative path",
-  );
 
 export const collectiblePrizeSchema = z.object({
   type: z.literal("collectible"),

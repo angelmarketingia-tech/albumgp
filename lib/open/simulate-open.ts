@@ -33,6 +33,23 @@ const collectible = (
 
 const NONE: Prize = { type: "none", label: "No ganaste" };
 
+// Imágenes promocionales de las cartas garantizadas, por país. Guardá los
+// archivos en public/assets/cartas/premios/ con EXACTAMENTE estos nombres y
+// aparecerán en las cartas. Formatos soportados por next/image: .webp/.png/.jpg.
+// (Si no existe el archivo, la carta cae al diseño genérico — no rompe nada.)
+const PROMO_IMG = {
+  SV: {
+    freebet: "/assets/cartas/premios/sv-freebet-10.webp",
+    giros: "/assets/cartas/premios/sv-giros-200.webp",
+    deposito: "/assets/cartas/premios/sv-deposito-3x.webp",
+  },
+  GT: {
+    freebet: "/assets/cartas/premios/gt-freebet-100.webp",
+    giros: "/assets/cartas/premios/gt-giros-200.webp",
+    deposito: "/assets/cartas/premios/gt-deposito-3x.webp",
+  },
+} as const;
+
 // Garantizados: bono de bienvenida estándar GanaPlay (igual que el seed).
 function guaranteedFor(country: "SV" | "GT"): Prize[] {
   const isSV = country === "SV";
@@ -40,10 +57,11 @@ function guaranteedFor(country: "SV" | "GT"): Prize[] {
   const bet = isSV ? 10 : 100;
   const currency = isSV ? "USD" : "GTQ";
   const game = isSV ? "Clover Super Pot" : "Super Tiki Strike";
+  const img = PROMO_IMG[country];
   return [
-    { type: "sports_credit", amount: bet, currency, label: `${symbol}${bet} ${currency} en free bets` },
-    { type: "casino_spins", count: 200, game_name: game, label: `200 giros gratis en ${game}` },
-    { type: "deposit_match", multiplier: 3, extras: "giros gratis", label: "3× tu primer depósito + giros gratis" },
+    { type: "sports_credit", amount: bet, currency, label: `${symbol}${bet} ${currency} en free bets`, image_url: img.freebet },
+    { type: "casino_spins", count: 200, game_name: game, label: `200 giros gratis en ${game}`, image_url: img.giros },
+    { type: "deposit_match", multiplier: 3, extras: "giros gratis", label: "3× tu primer depósito + giros gratis", image_url: img.deposito },
   ];
 }
 

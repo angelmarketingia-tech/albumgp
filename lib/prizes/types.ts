@@ -17,6 +17,10 @@ export type SportsCreditPrize = {
   amount: number;
   currency: Currency;
   label: string;
+  // Imagen promocional opcional. Si está, la carta la muestra full-bleed en
+  // lugar del diseño genérico (ícono + monto). `| undefined` para alinear con
+  // la inferencia de Zod bajo `exactOptionalPropertyTypes`.
+  image_url?: string | undefined;
 };
 
 export type CasinoSpinsPrize = {
@@ -24,6 +28,8 @@ export type CasinoSpinsPrize = {
   count: number;
   game_name: string;
   label: string;
+  // Imagen promocional opcional (ver SportsCreditPrize).
+  image_url?: string | undefined;
 };
 
 export type DepositMatchPrize = {
@@ -33,6 +39,8 @@ export type DepositMatchPrize = {
   // declared `| undefined` to align with Zod's `.optional()` inference.
   extras?: string | undefined;
   label: string;
+  // Imagen promocional opcional (ver SportsCreditPrize).
+  image_url?: string | undefined;
 };
 
 /**
