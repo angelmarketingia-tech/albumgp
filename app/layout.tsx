@@ -1,4 +1,5 @@
 import type { Metadata, Viewport } from "next";
+import Script from "next/script";
 import { DM_Sans, Fraunces } from "next/font/google";
 import { AgeGate } from "@/components/legal/AgeGate";
 import "./globals.css";
@@ -86,6 +87,15 @@ export default function RootLayout({
         {/* 18+ confirmation overlay (client island; no-op when already accepted
             or when JS is disabled — the platform age-verifies at signup). */}
         <AgeGate />
+        {/* Asistente de voz ElevenLabs (ConvAI). El custom element lo monta el
+            script embebido de unpkg. La CSP en next.config.mjs habilita el
+            script-src/connect-src/etc. de ElevenLabs. */}
+        {/* @ts-expect-error custom element no tipado por React */}
+        <elevenlabs-convai agent-id="agent_4201kt5bb5hveac8406zc2m9yfpt"></elevenlabs-convai>
+        <Script
+          src="https://unpkg.com/@elevenlabs/convai-widget-embed"
+          strategy="afterInteractive"
+        />
       </body>
     </html>
   );

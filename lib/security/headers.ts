@@ -29,13 +29,23 @@
  */
 const IS_PROD: boolean = process.env.NODE_ENV === "production";
 
+// ElevenLabs ConvAI widget: embed servido por unpkg; conecta por HTTPS/WSS a la
+// API de ElevenLabs, usa Web Workers (blob:) y pide micrófono. Orígenes acotados.
+const ELEVENLABS_SCRIPT = "https://unpkg.com https://*.elevenlabs.io";
+const ELEVENLABS_CONNECT =
+  "https://*.elevenlabs.io wss://*.elevenlabs.io https://unpkg.com";
+
 const CSP_DIRECTIVES: ReadonlyArray<string> = [
   "default-src 'self'",
-  IS_PROD ? "script-src 'self'" : "script-src 'self' 'unsafe-inline'",
-  "style-src 'self' 'unsafe-inline'",
-  "img-src 'self' data: blob:",
+  IS_PROD
+    ? `script-src 'self' ${ELEVENLABS_SCRIPT}`
+    : `script-src 'self' 'unsafe-inline' ${ELEVENLABS_SCRIPT}`,
+  "worker-src 'self' blob:",
+  "style-src 'self' 'unsafe-inline' https://unpkg.com",
+  "img-src 'self' data: blob: https://*.elevenlabs.io",
+  "media-src 'self' blob: https://*.elevenlabs.io",
   "font-src 'self' data:",
-  "connect-src 'self'",
+  `connect-src 'self' ${ELEVENLABS_CONNECT}`,
   "frame-ancestors 'none'",
   "base-uri 'self'",
   "form-action 'self'",
@@ -74,7 +84,8 @@ export const SECURITY_HEADERS_LIST: ReadonlyArray<
   },
   {
     key: "Permissions-Policy",
-    value: "camera=(), microphone=(), geolocation=(), payment=()",
+    // microphone=(self) habilita el asistente de voz ElevenLabs en este origen.
+    value: "camera=(), microphone=(self), geolocation=(), payment=()",
   },
   // Evita que CDNs / bfcache filtren JSON de packs entre usuarios.
   {

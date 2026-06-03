@@ -43,10 +43,11 @@ describe("SECURITY_HEADERS_LIST", () => {
     expect(hsts).toContain("preload");
   });
 
-  it("Permissions-Policy locks camera, microphone, geolocation, payment", () => {
+  it("Permissions-Policy locks camera, geolocation, payment; allows mic on self (ElevenLabs voice)", () => {
     const pp = SECURITY_HEADERS["Permissions-Policy"] ?? "";
     expect(pp).toContain("camera=()");
-    expect(pp).toContain("microphone=()");
+    // El asistente de voz ElevenLabs requiere micrófono en este mismo origen.
+    expect(pp).toContain("microphone=(self)");
     expect(pp).toContain("geolocation=()");
     expect(pp).toContain("payment=()");
   });

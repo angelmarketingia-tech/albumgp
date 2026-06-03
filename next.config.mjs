@@ -6,9 +6,16 @@ const isProd = process.env.NODE_ENV === "production";
 
 // WHY: prod debe servir CSP estricta sin 'unsafe-inline' (SECURITY.md);
 // dev lo necesita para HMR/overlays de Next.
+// ElevenLabs ConvAI widget: el embed se sirve desde unpkg y el widget conecta
+// por HTTPS/WSS a la API de ElevenLabs, usa Web Workers (blob:) y pide micrófono.
+// Habilitamos exactamente esos orígenes — nada de comodines amplios.
+const ELEVENLABS_SCRIPT = "https://unpkg.com https://*.elevenlabs.io";
+const ELEVENLABS_CONNECT =
+  "https://*.elevenlabs.io wss://*.elevenlabs.io https://unpkg.com";
+
 const scriptSrc = isProd
-  ? "script-src 'self'"
-  : "script-src 'self' 'unsafe-inline'";
+  ? `script-src 'self' ${ELEVENLABS_SCRIPT}`
+  : `script-src 'self' 'unsafe-inline' ${ELEVENLABS_SCRIPT}`;
 
 const SECURITY_HEADERS = [
   {
@@ -16,10 +23,12 @@ const SECURITY_HEADERS = [
     value:
       "default-src 'self'; " +
       scriptSrc + "; " +
-      "style-src 'self' 'unsafe-inline'; " +
-      "img-src 'self' data: blob:; " +
+      "worker-src 'self' blob:; " +
+      "style-src 'self' 'unsafe-inline' https://unpkg.com; " +
+      "img-src 'self' data: blob: https://*.elevenlabs.io; " +
+      "media-src 'self' blob: https://*.elevenlabs.io; " +
       "font-src 'self' data:; " +
-      "connect-src 'self'; " +
+      `connect-src 'self' ${ELEVENLABS_CONNECT}; ` +
       "frame-ancestors 'none'; " +
       "base-uri 'self'; " +
       "form-action 'self'",
@@ -33,7 +42,8 @@ const SECURITY_HEADERS = [
   { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
   {
     key: "Permissions-Policy",
-    value: "camera=(), microphone=(), geolocation=(), payment=()",
+    // microphone=(self) habilita el asistente de voz ElevenLabs en este origen.
+    value: "camera=(), microphone=(self), geolocation=(), payment=()",
   },
 ];
 
