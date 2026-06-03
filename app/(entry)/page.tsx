@@ -82,28 +82,57 @@ export default function EntryPage({
         <Logo variant="blanco" width={180} priority />
       </div>
 
-      {/* Hero section — la imagen es opaca y va como fondo full-bleed.
-          `-mx-5` rompe el padding horizontal de <main> para sangrar al borde. */}
+      {/* Hero section — fondo full-bleed con vida: Ken Burns + barrido dorado +
+          sparkles. `-mx-5` rompe el padding horizontal de <main> para sangrar
+          al borde. `motion-reduce:*` apaga todo si el usuario lo pide. */}
       <section className="relative -mx-5 mt-6 h-72 overflow-hidden sm:h-80">
-        <Image
-          src="/assets/marketing/hero-envelopes.webp"
-          alt=""
-          fill
-          priority
-          sizes="100vw"
-          className="object-cover"
-        />
-        {/* Gradient hacia el verde profundo para que el siguiente bloque
-            (form) se sienta continuo con la pagina. */}
-        <div className="absolute inset-0 bg-gradient-to-b from-transparent via-gp-green-deep/40 to-gp-green-deep" />
+        {/* Capa de imagen animada (Ken Burns). Va en su propio div para que el
+            transform no afecte a los overlays/texto de arriba. */}
+        <div className="absolute inset-0 animate-hero-pan motion-reduce:animate-none will-change-transform">
+          <Image
+            src="/assets/marketing/hero-envelopes.webp"
+            alt=""
+            fill
+            priority
+            sizes="100vw"
+            className="object-cover"
+          />
+        </div>
+
+        {/* Barrido de luz dorada diagonal que cruza la escena. */}
+        <div
+          aria-hidden
+          className="pointer-events-none absolute inset-0 z-[5] overflow-hidden motion-reduce:hidden"
+        >
+          <div className="absolute -inset-y-10 left-0 w-1/3 animate-hero-sheen bg-gradient-to-r from-transparent via-gp-gold/30 to-transparent blur-md" />
+        </div>
+
+        {/* Sparkles dorados ascendentes (decorativos). */}
+        <div aria-hidden className="pointer-events-none absolute inset-0 z-[6] motion-reduce:hidden">
+          <span className="absolute left-[18%] top-[62%] h-1.5 w-1.5 rounded-full bg-gp-gold/90 shadow-[0_0_8px_2px_rgba(244,208,63,0.6)] animate-spark-rise [animation-delay:0s]" />
+          <span className="absolute left-[44%] top-[70%] h-1 w-1 rounded-full bg-amber-200/90 shadow-[0_0_6px_2px_rgba(244,208,63,0.5)] animate-spark-rise [animation-delay:1.1s]" />
+          <span className="absolute left-[68%] top-[58%] h-2 w-2 rounded-full bg-gp-gold/80 shadow-[0_0_10px_3px_rgba(212,160,23,0.6)] animate-spark-rise [animation-delay:2.2s]" />
+          <span className="absolute left-[82%] top-[66%] h-1 w-1 rounded-full bg-amber-100/90 shadow-[0_0_6px_2px_rgba(244,208,63,0.5)] animate-spark-rise [animation-delay:3s]" />
+        </div>
+
+        {/* Viñeta + gradient hacia el verde profundo para continuidad con el form. */}
+        <div className="absolute inset-0 z-[7] bg-gradient-to-b from-gp-green-deep/20 via-gp-green-deep/40 to-gp-green-deep" />
+        <div className="absolute inset-0 z-[7] bg-[radial-gradient(120%_80%_at_50%_30%,transparent_40%,rgba(2,42,23,0.55)_100%)]" />
+
         <header className="relative z-10 flex h-full flex-col items-center justify-center px-5 text-center">
-          <span className="text-[10px] font-bold uppercase tracking-[0.5em] text-gp-gold/90">
-            TEMPORADA 2026
-          </span>
-          <h1 className="mt-2 font-display text-4xl sm:text-5xl font-black text-display-balance text-white drop-shadow-lg">
+          {/* TEMPORADA 2026 — protagonista: divisores dorados + glow latente. */}
+          <div className="flex items-center gap-3">
+            <span aria-hidden className="h-px w-8 bg-gradient-to-r from-transparent to-gp-gold/80 sm:w-12" />
+            <span className="animate-title-glow motion-reduce:animate-none bg-gradient-to-b from-amber-100 via-gp-gold to-amber-500 bg-clip-text font-display text-sm font-black uppercase tracking-[0.42em] text-transparent sm:text-base">
+              Temporada 2026
+            </span>
+            <span aria-hidden className="h-px w-8 bg-gradient-to-l from-transparent to-gp-gold/80 sm:w-12" />
+          </div>
+
+          <h1 className="mt-3 font-display text-4xl font-black text-display-balance text-white drop-shadow-[0_2px_12px_rgba(0,0,0,0.6)] sm:text-5xl">
             Abrí tu sobre
           </h1>
-          <p className="mt-2 text-base text-white/85 italic">
+          <p className="mt-2 text-base italic text-white/90 drop-shadow-md">
             Tu próximo premio espera adentro.
           </p>
         </header>

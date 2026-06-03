@@ -72,6 +72,31 @@ const config: Config = {
           "0%,100%": { opacity: "0.85" },
           "50%": { opacity: "0.55" },
         },
+        // Hero: Ken Burns lento — la imagen de fondo respira con un zoom y
+        // paneo casi imperceptible para que se sienta viva sin distraer.
+        "hero-pan": {
+          "0%": { transform: "scale(1.08) translate3d(0,0,0)" },
+          "50%": { transform: "scale(1.14) translate3d(-1.5%,-1.2%,0)" },
+          "100%": { transform: "scale(1.08) translate3d(0,0,0)" },
+        },
+        // Hero: barrido de luz dorada que cruza la escena en diagonal.
+        "hero-sheen": {
+          "0%": { transform: "translateX(-120%) skewX(-12deg)", opacity: "0" },
+          "12%": { opacity: "0.55" },
+          "30%": { transform: "translateX(120%) skewX(-12deg)", opacity: "0" },
+          "100%": { transform: "translateX(120%) skewX(-12deg)", opacity: "0" },
+        },
+        // "TEMPORADA 2026": glow dorado que late suave + leve flotar.
+        "title-glow": {
+          "0%,100%": { opacity: "0.92", textShadow: "0 0 14px rgba(212,160,23,0.35)" },
+          "50%": { opacity: "1", textShadow: "0 0 26px rgba(244,208,63,0.7), 0 0 6px rgba(244,208,63,0.5)" },
+        },
+        // Partículas doradas que ascienden lentamente en el hero.
+        "spark-rise": {
+          "0%": { transform: "translateY(8px)", opacity: "0" },
+          "20%,80%": { opacity: "0.8" },
+          "100%": { transform: "translateY(-22px)", opacity: "0" },
+        },
       },
       animation: {
         "envelope-breathe": "envelope-breathe 6s cubic-bezier(0.4,0,0.6,1) infinite",
@@ -80,6 +105,10 @@ const config: Config = {
         "notif-flash": "notif-flash 700ms ease-out both",
         "cta-appear": "cta-appear 500ms ease-out both",
         "rarity-glow": "rarity-glow 2.4s ease-in-out infinite",
+        "hero-pan": "hero-pan 22s ease-in-out infinite",
+        "hero-sheen": "hero-sheen 7s ease-in-out infinite",
+        "title-glow": "title-glow 3.2s ease-in-out infinite",
+        "spark-rise": "spark-rise 4s ease-in-out infinite",
       },
       boxShadow: {
         glass: "0 8px 32px 0 rgba(0,0,0,0.37)",
