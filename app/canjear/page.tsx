@@ -90,6 +90,31 @@ async function redeemAction(formData: FormData): Promise<void> {
   const h = headers();
   const ip = ipFromHeaders(h);
 
+  // -- MODO SIMULACIÓN (preview sin DB real) -------------------------------
+  // Activado con SIMULATE_REDEEM=1. Acepta cualquier código con formato válido,
+  // "hace como" que registra + envía la info al central (log + pequeño delay
+  // para que el spinner se sienta real) y redirige al login de GanaPlay. NO
+  // toca Postgres ni Redis. Útil para demos / QA del flujo visual mientras la
+  // base y el SSO real no están conectados. Quitar la env var = comportamiento
+  // real de producción intacto.
+  if (process.env.SIMULATE_REDEEM === "1") {
+    // País: si el código termina en "GT" usamos Guatemala; default SV.
+    const country = code.endsWith("GT") ? "GT" : "SV";
+    console.log(
+      JSON.stringify({
+        level: "info",
+        event: "redeem.simulated",
+        code_hash: hashCode(code),
+        country,
+        note: "SIMULATE_REDEEM=1 — no DB write, no webhook; fake delivery",
+      }),
+    );
+    // Simula la latencia de "mandar la info" (registro + webhook al central).
+    await new Promise((r) => setTimeout(r, 600));
+    const dest = country === "GT" ? "signin-gt" : "signin-sv";
+    return redirect(`/ir/${dest}`);
+  }
+
   // Rate-limit BEFORE touching the DB. Without SSO there's no account bucket,
   // so we throttle by IP (5/min) + by code (3/min) to blunt brute-force of the
   // pre-generated code pool. Server actions already carry Next's same-origin
