@@ -1,7 +1,7 @@
 import type { Metadata, Viewport } from "next";
-import Script from "next/script";
 import { DM_Sans, Fraunces } from "next/font/google";
 import { AgeGate } from "@/components/legal/AgeGate";
+import { ElevenLabsWidget } from "@/components/widgets/ElevenLabsWidget";
 import "./globals.css";
 
 // [CONFIRMAR_TIPOGRAFIA_OFICIAL] — el Manual de Marca especifica:
@@ -90,16 +90,10 @@ export default function RootLayout({
         {/* Asistente de voz ElevenLabs (ConvAI). El custom element lo monta el
             script embebido de unpkg. La CSP en next.config.mjs habilita los
             orígenes de ElevenLabs (script/connect/worker/media/img/font).
-            Usamos el <script async> nativo recomendado por ElevenLabs en vez de
-            next/script para que el embed registre el custom element de forma
-            fiable en cliente. */}
-        {/* @ts-expect-error custom element no tipado por React */}
-        <elevenlabs-convai agent-id="agent_4201kt5bb5hveac8406zc2m9yfpt"></elevenlabs-convai>
-        <Script
-          id="elevenlabs-convai-embed"
-          src="https://unpkg.com/@elevenlabs/convai-widget-embed"
-          strategy="afterInteractive"
-        />
+            Usamos el <script async> NATIVO (no next/script) porque el embed de
+            ElevenLabs registra el custom element vía customElements.define, y
+            la inyección diferida de next/script no lo ejecuta de forma fiable. */}
+        <ElevenLabsWidget />
       </body>
     </html>
   );
