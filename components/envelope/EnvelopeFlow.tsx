@@ -534,7 +534,7 @@ export function EnvelopeFlow({
                   </span>
                 ) : null}
                 {/* size sm en mobile, md en sm+. Primera carta priority. */}
-                <Card prize={item.prize} revealed size="sm" priority={i === 0} />
+                <Card prize={item.prize} country={country} revealed size="sm" priority={i === 0} />
               </li>
             );
           })}

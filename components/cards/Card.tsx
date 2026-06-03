@@ -9,6 +9,61 @@ import { PrizeIcon } from "./PrizeIcon";
 import { RarityBadge } from "./RarityBadge";
 import { Confetti } from "./Confetti";
 
+/**
+ * Imágenes promocionales de las cartas garantizadas, por país. Fuente única de
+ * verdad para el render: la carta SIEMPRE resuelve su imagen desde acá según el
+ * tipo de premio + país, sin depender del `image_url` que venga en los datos
+ * (que puede estar viejo/roto en la DB de producción). Archivos en
+ * public/assets/cartas/premios/ — ver README de esa carpeta.
+ */
+const PROMO_IMG: Record<"SV" | "GT", Record<"sports_credit" | "casino_spins" | "deposit_match", string>> = {
+  SV: {
+    sports_credit: "/assets/cartas/premios/sv-freebet-10.png",
+    casino_spins: "/assets/cartas/premios/sv-giros-200.png",
+    deposit_match: "/assets/cartas/premios/sv-deposito-3x.png",
+  },
+  GT: {
+    sports_credit: "/assets/cartas/premios/gt-freebet-100.png",
+    casino_spins: "/assets/cartas/premios/gt-giros-200.png",
+    deposit_match: "/assets/cartas/premios/gt-deposito-3x.png",
+  },
+};
+
+/**
+ * Resuelve la imagen promocional de una carta garantizada de forma robusta.
+ *
+ * Prioridad:
+ *   1) El `image_url` que trae el premio, SOLO si apunta a un archivo real
+ *      (.png — los .webp viejos en la DB no existen y dan 404, los ignoramos).
+ *   2) El país explícito (`country`) si lo tenemos.
+ *   3) Inferir el país por la moneda del premio (USD→SV, GTQ→GT) para
+ *      sports_credit; default SV para el resto cuando no hay país.
+ *
+ * Devuelve `undefined` si el premio no es de los 3 garantizados → la carta cae
+ * a su diseño genérico (ícono + texto), nunca a una imagen rota.
+ */
+function resolvePromoImage(
+  prize: Prize,
+  country: "SV" | "GT" | undefined,
+): string | undefined {
+  if (
+    prize.type !== "sports_credit" &&
+    prize.type !== "casino_spins" &&
+    prize.type !== "deposit_match"
+  ) {
+    return undefined;
+  }
+  // Si los datos ya traen un .png explícito, respetarlo (permite overrides).
+  if (prize.image_url !== undefined && prize.image_url.endsWith(".png")) {
+    return prize.image_url;
+  }
+  // Inferir país: explícito > moneda (solo sports_credit) > SV por defecto.
+  const inferred: "SV" | "GT" =
+    country ??
+    (prize.type === "sports_credit" && prize.currency === "GTQ" ? "GT" : "SV");
+  return PROMO_IMG[inferred][prize.type];
+}
+
 /** Premio "real" = canjeable o de valor monetario / mercancía. */
 function isRealPrize(prize: Prize): boolean {
   return (
@@ -44,6 +99,11 @@ export type CardSize = "sm" | "md" | "lg";
 
 export interface CardProps {
   prize: Prize;
+  /**
+   * País del sobre. Permite resolver la imagen promocional correcta de las
+   * cartas garantizadas (SV vs GT) sin depender del `image_url` de los datos.
+   */
+  country?: "SV" | "GT" | undefined;
   /** Si `false`, mostramos el dorso. Default `true`. */
   revealed?: boolean;
   /** Retraso del flip-in en milisegundos. Default `0`. */
@@ -118,22 +178,21 @@ function CardFrontContent({
   prize,
   size,
   priority,
+  country,
 }: {
   prize: Prize;
   size: CardSize;
   priority: boolean;
+  country?: "SV" | "GT" | undefined;
 }): JSX.Element {
-  // Premios garantizados con imagen promocional → la mostramos full-bleed en
-  // lugar del diseño genérico (ícono + monto + label).
-  if (
-    (prize.type === "sports_credit" ||
-      prize.type === "casino_spins" ||
-      prize.type === "deposit_match") &&
-    prize.image_url !== undefined
-  ) {
+  // Premios garantizados → siempre mostramos la imagen promocional full-bleed.
+  // `resolvePromoImage` garantiza una imagen real (.png) inferida por país/
+  // moneda, ignorando los `image_url` viejos (.webp) que puedan venir en datos.
+  const promoImage = resolvePromoImage(prize, country);
+  if (promoImage !== undefined) {
     return (
       <PromoImageCard
-        imageUrl={prize.image_url}
+        imageUrl={promoImage}
         label={prize.label}
         size={size}
         priority={priority}
@@ -333,6 +392,7 @@ function CardFrontContent({
 
 export function Card({
   prize,
+  country,
   revealed = true,
   delay = 0,
   size = "md",
@@ -409,7 +469,7 @@ export function Card({
           <div
             className={`flex h-full w-full flex-col rounded-[7px] ${surfaceCls}`}
           >
-            <CardFrontContent prize={prize} size={size} priority={priority} />
+            <CardFrontContent prize={prize} size={size} priority={priority} country={country} />
           </div>
         </div>
 
