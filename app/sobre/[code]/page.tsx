@@ -23,6 +23,7 @@ import { EnvelopeFlow } from "@/components/envelope/EnvelopeFlow";
 import { DEPOSIT_URLS } from "@/lib/brand/constants";
 import { prisma } from "@/lib/db/client";
 import { openCodeDirect } from "@/lib/open/open-code";
+import { simulateOpen, simulatePeekTier } from "@/lib/open/simulate-open";
 import {
   type EnvelopeTier,
   normalizeCode,
@@ -75,16 +76,21 @@ export default async function SobrePage({
     // the open. Failures (DB down, missing row, unknown tier) fall back to a
     // generic idle so we never block the user from tapping.
     let idleTier: EnvelopeTier | undefined;
-    try {
-      const peek = await prisma.code.findUnique({
-        where: { code: normalized },
-        select: { status: true, prizeSet: { select: { tier: true } } },
-      });
-      if (peek && peek.status === "active") {
-        idleTier = tierFromValue(peek.prizeSet?.tier) ?? undefined;
+    if (process.env.SIMULATE_REDEEM === "1") {
+      // Demo sin DB: inferimos el tier del código para el badge.
+      idleTier = simulatePeekTier(normalized);
+    } else {
+      try {
+        const peek = await prisma.code.findUnique({
+          where: { code: normalized },
+          select: { status: true, prizeSet: { select: { tier: true } } },
+        });
+        if (peek && peek.status === "active") {
+          idleTier = tierFromValue(peek.prizeSet?.tier) ?? undefined;
+        }
+      } catch {
+        // swallow — idle render is best-effort, real validation happens on reveal
       }
-    } catch {
-      // swallow — idle render is best-effort, real validation happens on reveal
     }
     const idleTheme = idleTier ? TIER_THEME[idleTier] : undefined;
     return (
@@ -124,11 +130,15 @@ export default async function SobrePage({
     new Request("http://internal.local", { headers: h }),
   );
   const userAgent = h.get("user-agent") ?? undefined;
-  const result = await openCodeDirect({
-    code: normalized,
-    ip,
-    ...(userAgent !== undefined ? { userAgent } : {}),
-  });
+  // Demo sin DB: generamos un pack simulado (resolvePack real, sin Postgres).
+  const result: Awaited<ReturnType<typeof openCodeDirect>> =
+    process.env.SIMULATE_REDEEM === "1"
+      ? { ok: true, status: 200, body: simulateOpen(normalized) }
+      : await openCodeDirect({
+          code: normalized,
+          ip,
+          ...(userAgent !== undefined ? { userAgent } : {}),
+        });
 
   if (!result.ok) {
     // WHY notFound on 404: keeps HTTP status truthful for invalid codes

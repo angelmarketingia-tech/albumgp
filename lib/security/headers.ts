@@ -33,22 +33,29 @@ const IS_PROD: boolean = process.env.NODE_ENV === "production";
 // jsdelivr, conecta por HTTPS/WSS a las APIs/LiveKit de ElevenLabs, usa
 // fingerprinting anti-fraude (openfpcdn/fingerprint), fuentes de Google y
 // assets en googleapis. Habilitamos exactamente esos orígenes.
+// blob: en script-src es necesario para el AudioWorklet de la LLAMADA de voz:
+// ElevenLabs construye el rawAudioProcessor worklet como un Blob y lo carga con
+// audioContext.audioWorklet.addModule(blobURL). Sin blob: en script-src el
+// navegador bloquea el worklet → "Failed to load the rawAudioProcessor worklet".
 const EL_SCRIPT =
-  "https://unpkg.com https://cdn.jsdelivr.net https://*.elevenlabs.io https://m1.openfpcdn.io https://*.fpjs.io";
+  "https://unpkg.com https://cdn.jsdelivr.net https://*.elevenlabs.io https://m1.openfpcdn.io https://*.fpjs.io blob:";
 const EL_CONNECT =
-  "https://*.elevenlabs.io wss://*.elevenlabs.io https://unpkg.com https://cdn.jsdelivr.net https://m1.openfpcdn.io https://*.fpjs.io https://api.fpjs.io https://storage.googleapis.com";
+  "https://*.elevenlabs.io wss://*.elevenlabs.io https://unpkg.com https://cdn.jsdelivr.net https://m1.openfpcdn.io https://*.fpjs.io https://api.fpjs.io https://storage.googleapis.com blob:";
 const EL_STYLE = "https://unpkg.com https://cdn.jsdelivr.net https://fonts.googleapis.com";
 const EL_FONT = "https://fonts.gstatic.com";
 const EL_IMG = "https://*.elevenlabs.io https://storage.googleapis.com";
-const EL_MEDIA = "https://*.elevenlabs.io https://storage.googleapis.com";
+const EL_MEDIA = "https://*.elevenlabs.io https://storage.googleapis.com blob:";
 
 const CSP_DIRECTIVES: ReadonlyArray<string> = [
   "default-src 'self'",
   // 'unsafe-inline' también en prod: el embed de ElevenLabs ejecuta scripts
   // inline (el navegador los bloqueaba con 'self' a secas → el widget no
-  // montaba). Trade-off de seguridad aceptado para habilitar el asistente.
+  // montaba). 'blob:' habilita el AudioWorklet de la llamada de voz.
+  // Trade-off de seguridad aceptado para habilitar el asistente.
   `script-src 'self' 'unsafe-inline' ${EL_SCRIPT}`,
+  // AudioWorklet + Web Workers desde blob:.
   "worker-src 'self' blob:",
+  "child-src 'self' blob:",
   `style-src 'self' 'unsafe-inline' ${EL_STYLE}`,
   `img-src 'self' data: blob: ${EL_IMG}`,
   `media-src 'self' blob: ${EL_MEDIA}`,

@@ -11,14 +11,18 @@ const isProd = process.env.NODE_ENV === "production";
 // fingerprinting anti-fraude (openfpcdn/fingerprint), fuentes de Google y
 // assets en googleapis. Habilitamos exactamente esos orígenes.
 // IMPORTANTE: mantener en sync con lib/security/headers.ts (fuente de verdad).
+// blob: en script-src/connect-src es necesario para el AudioWorklet de la
+// LLAMADA de voz: ElevenLabs construye el rawAudioProcessor worklet como Blob y
+// lo carga con audioWorklet.addModule(blobURL). Sin blob: → "Failed to load the
+// rawAudioProcessor worklet module".
 const EL_SCRIPT =
-  "https://unpkg.com https://cdn.jsdelivr.net https://*.elevenlabs.io https://m1.openfpcdn.io https://*.fpjs.io";
+  "https://unpkg.com https://cdn.jsdelivr.net https://*.elevenlabs.io https://m1.openfpcdn.io https://*.fpjs.io blob:";
 const EL_CONNECT =
-  "https://*.elevenlabs.io wss://*.elevenlabs.io https://unpkg.com https://cdn.jsdelivr.net https://m1.openfpcdn.io https://*.fpjs.io https://api.fpjs.io https://storage.googleapis.com";
+  "https://*.elevenlabs.io wss://*.elevenlabs.io https://unpkg.com https://cdn.jsdelivr.net https://m1.openfpcdn.io https://*.fpjs.io https://api.fpjs.io https://storage.googleapis.com blob:";
 const EL_STYLE = "https://unpkg.com https://cdn.jsdelivr.net https://fonts.googleapis.com";
 const EL_FONT = "https://fonts.gstatic.com";
 const EL_IMG = "https://*.elevenlabs.io https://storage.googleapis.com";
-const EL_MEDIA = "https://*.elevenlabs.io https://storage.googleapis.com";
+const EL_MEDIA = "https://*.elevenlabs.io https://storage.googleapis.com blob:";
 
 // 'unsafe-inline' también en prod: el embed de ElevenLabs ejecuta scripts
 // inline (el navegador los bloqueaba con 'self' a secas → el widget no montaba).
@@ -31,6 +35,7 @@ const SECURITY_HEADERS = [
       "default-src 'self'; " +
       scriptSrc + "; " +
       "worker-src 'self' blob:; " +
+      "child-src 'self' blob:; " +
       `style-src 'self' 'unsafe-inline' ${EL_STYLE}; ` +
       `img-src 'self' data: blob: ${EL_IMG}; ` +
       `media-src 'self' blob: ${EL_MEDIA}; ` +
