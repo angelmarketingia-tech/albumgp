@@ -9,16 +9,16 @@ si falta, la carta cae al diseño genérico (no rompe nada).
 ### 🇸🇻 El Salvador
 | Carta | Archivo |
 |---|---|
-| Free bet $10 en apuestas | `sv-freebet-10.webp` |
-| 200 giros gratis | `sv-giros-200.webp` |
-| 3× tu primer depósito | `sv-deposito-3x.webp` |
+| Free bet $10 en apuestas | `sv-freebet-10.png` |
+| 200 giros gratis | `sv-giros-200.png` |
+| 3× tu primer depósito | `sv-deposito-3x.png` |
 
 ### 🇬🇹 Guatemala
 | Carta | Archivo |
 |---|---|
-| Free bet Q100 en apuestas | `gt-freebet-100.webp` |
-| 200 giros gratis | `gt-giros-200.webp` |
-| 3× tu primer depósito | `gt-deposito-3x.webp` |
+| Free bet Q100 en apuestas | `gt-freebet-100.png` |
+| 200 giros gratis | `gt-giros-200.png` |
+| 3× tu primer depósito | `gt-deposito-3x.png` |
 
 ## Recomendaciones de la imagen
 

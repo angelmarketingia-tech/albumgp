@@ -266,14 +266,14 @@ const poolPlatinoGT = (): VariablePoolEntry[] => [
 // public/assets/cartas/premios/ con estos nombres.
 const PROMO_IMG = {
   SV: {
-    freebet: "/assets/cartas/premios/sv-freebet-10.webp",
-    giros: "/assets/cartas/premios/sv-giros-200.webp",
-    deposito: "/assets/cartas/premios/sv-deposito-3x.webp",
+    freebet: "/assets/cartas/premios/sv-freebet-10.png",
+    giros: "/assets/cartas/premios/sv-giros-200.png",
+    deposito: "/assets/cartas/premios/sv-deposito-3x.png",
   },
   GT: {
-    freebet: "/assets/cartas/premios/gt-freebet-100.webp",
-    giros: "/assets/cartas/premios/gt-giros-200.webp",
-    deposito: "/assets/cartas/premios/gt-deposito-3x.webp",
+    freebet: "/assets/cartas/premios/gt-freebet-100.png",
+    giros: "/assets/cartas/premios/gt-giros-200.png",
+    deposito: "/assets/cartas/premios/gt-deposito-3x.png",
   },
 } as const;
 
