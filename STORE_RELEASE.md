@@ -2,7 +2,13 @@
 
 App web Next.js envuelta con **Capacitor** en un WebView nativo. La app es
 **server-rendered** (no se exporta estática): el shell nativo carga la web en
-vivo desde **`https://album2026.ganaplay.lat`**.
+vivo desde **`https://albumgp.vercel.app`**.
+
+> ⚠️ **Dominio temporal**: la app apunta a `albumgp.vercel.app` (el dominio que
+> hoy resuelve y sirve la web). El dominio propio `album2026.ganaplay.lat` tiene
+> el **DNS sin configurar** (no resuelve). Cuando lo configures en Vercel y
+> resuelva por HTTPS, cambiá `PROD_URL` en `capacitor.config.ts`, corré
+> `npm run cap:sync` y re-compilá el `.aab`.
 
 ---
 
@@ -13,7 +19,7 @@ vivo desde **`https://album2026.ganaplay.lat`**.
 - **Proyecto Android nativo generado** en `android/` con:
   - `applicationId = com.ganaplay.album`, `versionCode 1`, `versionName 1.0`
   - nombre "GanaPlay Álbum"
-  - `server.url = https://album2026.ganaplay.lat` ya inyectado
+  - `server.url = https://albumgp.vercel.app` ya inyectado
   - `allowNavigation` para `ganaplay.lat / .sv / .gt` (el login SSO no expulsa
     al usuario del WebView a mitad de canje)
 - **Iconos + splash nativos** generados (74 assets, light + dark, todas las
@@ -37,8 +43,8 @@ El proyecto YA compila un `.aab`. Lo único entre vos y Play Store es:
 1. **Generar tu keystore + `keystore.properties`** (§C) y re-compilar para tener
    el `.aab` **firmado**. Solo vos debés tener el keystore (controla las
    actualizaciones de la app). Comando: `cd android && ./gradlew.bat bundleRelease`.
-2. **Desplegar la web** en `https://album2026.ganaplay.lat` (HTTPS). Sin esto la
-   app nativa muestra el shell de espera.
+2. **Desplegar la web** en `https://albumgp.vercel.app` (HTTPS) — ✅ ya está
+   desplegada y funcionando. Sin esto la app nativa muestra el shell de espera.
 3. **Cuenta Google Play Console** (US$25, pago único) — ver §A.
 4. Subir el `.aab` firmado a Play (§D) + completar metadata (§F) y clasificación
    de edad/gambling.
@@ -182,16 +188,16 @@ hasta firmarlo).
 | Clasificación de edad | cuestionario IARC → 18+ | 17+/18+ (gambling) |
 | Categoría | Entretenimiento | Entretenimiento |
 
-Para las **capturas**, abrí `https://album2026.ganaplay.lat` en Chrome (F12 →
+Para las **capturas**, abrí `https://albumgp.vercel.app` en Chrome (F12 →
 modo iPhone/Android) y capturá: entrada de código, sobre cerrado, reveal, álbum.
 
 ---
 
 ## §G. Checklist final antes de enviar
 
-- [ ] Web desplegada y funcional en `https://album2026.ganaplay.lat` (HTTPS).
+- [x] Web desplegada y funcional en `https://albumgp.vercel.app` (HTTPS).
 - [ ] Env de prod: `DATABASE_URL` **pooled**, `AUTH_SECRET`, `UPSTASH_*`,
-      `NEXT_PUBLIC_SITE_URL=https://album2026.ganaplay.lat` (el boot valida).
+      `NEXT_PUBLIC_SITE_URL=https://albumgp.vercel.app` (el boot valida).
 - [ ] Probado el flujo completo en el dominio real: código → sobre → canjear →
       rebote a `ganaplay.sv|gt/iniciar-sesion`.
 - [ ] Probado DENTRO del WebView (instalá el `.aab` por "internal testing" de

@@ -8,8 +8,10 @@ import type { CapacitorConfig } from "@capacitor/cli";
 // LIVE deployed app from `server.url`. This is the supported pattern for
 // server-rendered Next apps wrapped in Capacitor.
 //
-// Dominio de producción: album2026.ganaplay.lat (la web debe estar desplegada
-// en HTTPS ahí antes de que la app nativa funcione). Override con CAP_SERVER_URL
+// Dominio de producción: albumgp.vercel.app (la web debe estar desplegada en
+// HTTPS ahí antes de que la app nativa funcione). Cuando el dominio propio
+// (album2026.ganaplay.lat) tenga el DNS configurado y resolviendo, cambiá
+// PROD_URL de vuelta y re-corré `npm run cap:sync`. Override con CAP_SERVER_URL
 // para staging/pruebas:
 //   CAP_SERVER_URL=https://staging.album.ganaplay.lat npx cap sync
 //
@@ -17,7 +19,7 @@ import type { CapacitorConfig } from "@capacitor/cli";
 // mínimo `native/www` (redirect/splash) usado solo si server.url no estuviera
 // seteado. Ver STORE_RELEASE.md para el flujo completo.
 
-const PROD_URL = "https://album2026.ganaplay.lat";
+const PROD_URL = "https://albumgp.vercel.app";
 const serverUrl = process.env.CAP_SERVER_URL ?? PROD_URL;
 
 const config: CapacitorConfig = {
@@ -35,6 +37,8 @@ const config: CapacitorConfig = {
     // el flujo SSO no expulse al usuario a un navegador externo a mitad de canje.
     // Cualquier otro host se abre fuera (comportamiento por defecto de Capacitor).
     allowNavigation: [
+      "albumgp.vercel.app",
+      "*.vercel.app",
       "album2026.ganaplay.lat",
       "*.ganaplay.lat",
       "ganaplay.sv",
